@@ -17,9 +17,9 @@ RUN IPE_LZF_BETTERCOMPRESSION=1 install-php-extensions \
     lzf \
     mysqli \
     opcache \
-    # pdo_dblib \
-    # pdo_odbc \
-    # pgsql \
+    pdo_dblib \
+    pdo_odbc \
+    pgsql \
     zip
 
 COPY ./supervisord.conf /etc/supervisord.conf
