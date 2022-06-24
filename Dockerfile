@@ -28,7 +28,8 @@ COPY ./php/php.ini /usr/local/etc/php/conf.d/999-php.ini
 COPY ./public/ /app/
 
 WORKDIR /app
-RUN curl -fsSL "https://www.adminer.org/latest-mysql-en.php" -o adminer.php && \
+RUN curl -fsSL "https://www.adminer.org/latest-en.php" -o adminer.php && \
+    curl -fsSL "https://github.com/vrana/adminer/releases/download/v4.8.1/editor-4.8.1-en.php" -o editor.php && \
 	addgroup -S adminer \
     &&	adduser -S -G adminer adminer \
     &&	chown -R adminer:adminer /app
