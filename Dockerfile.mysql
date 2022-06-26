@@ -1,0 +1,23 @@
+FROM alpine:3.16
+
+RUN apk update && apk add --no-cache \
+    php8 \
+    php8-bz2 \
+    php8-zip \
+    php8-session \
+    php8-mysqli \
+    && rm -rf /var/cache/apk/* \
+    && addgroup -S adminer \
+    && adduser -S -G adminer adminer \
+    && mkdir /app \
+    && mkdir /app/tmp \
+    && chown -R adminer:adminer /app
+
+COPY ./php.ini /etc/php8/conf.d/999-php.ini
+COPY --chown=adminer:adminer ./app/ /app/
+
+WORKDIR /app
+USER adminer
+EXPOSE 8080
+ENTRYPOINT ["php", "--docroot", "/app" ]
+CMD ["--server", "0.0.0.0:8080"]
