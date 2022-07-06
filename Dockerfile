@@ -1,10 +1,16 @@
 FROM alpine:3.15
 
 RUN apk update && apk add --no-cache \
+    curl \
     nginx \
     nginx-mod-http-brotli \
+    php7-bz2 \
     php7-fpm \
-    php7-mysqli \
+    php7-pdo \
+    php7-pdo_mysql \
+    php7-pdo_odbc \
+    php7-pdo_pgsql \
+    php7-pdo_sqlite \
     php7-opcache \
     php7-session \
     php7-zip \
