@@ -6,19 +6,19 @@ function adminer_object()
 {
     include_once "./plugins/plugin.php";
 
-    include_once "./plugins/dump-date.php";
-    include_once "./plugins/dump-zip.php";
+    $pluginFiles = [
+        'dump-date',
+        'dump-zip',
+    ];
 
-    $plugins = array(
-        // new AdminerDumpBz2(),
-        new AdminerDumpDate(),
-        // new AdminerDumpJson(),
-        new AdminerDumpZip(),
-    );
+    $plugins = [];
+    foreach ($pluginFiles as $pluginFile) {
+        include_once "./plugins/{$pluginFile}.php";
+        $className = 'Adminer' . str_replace('-', '', ucwords($pluginFile, '-'));
+        $plugins[] = new $className();
+    }
 
     return new AdminerPlugin($plugins);
 }
 
-
-// include original Adminer or Adminer Editor
 include "./adminer.php";

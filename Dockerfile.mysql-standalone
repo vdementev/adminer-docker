@@ -9,18 +9,14 @@ RUN apk update && apk add --no-cache \
 
 # Add some PHP extensions
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-RUN IPE_LZF_BETTERCOMPRESSION=1 install-php-extensions \
+RUN install-php-extensions \
     bcmath \
     bz2 \
-    lz4 \
-    lzf \
-    mcrypt \
-    mysqli \
-    pcntl \
+    opcache \
     pdo_mysql \
-    uploadprogress \
     zip
 
+# Copy config files
 COPY ./php.ini /usr/local/etc/php/conf.d/01-php.ini
 
 WORKDIR /var/www/html
