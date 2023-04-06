@@ -1,0 +1,31 @@
+FROM php:8.1-cli-alpine
+
+# Add some system packages
+RUN apk update && apk add --no-cache \
+    brotli \
+    && rm -rf /var/cache/apk/ \
+    && rm -rf /root/.cache \
+    && rm -rf /tmp/*
+
+# Add some PHP extensions
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+RUN IPE_LZF_BETTERCOMPRESSION=1 install-php-extensions \
+    bcmath \
+    bz2 \
+    lz4 \
+    lzf \
+    mcrypt \
+    mysqli \
+    pcntl \
+    pdo_mysql \
+    uploadprogress \
+    zip
+
+COPY ./php.ini /usr/local/etc/php/conf.d/01-php.ini
+
+WORKDIR /var/www/html
+COPY /app /var/www/html
+RUN chown -R www-data:www-data /var/www/html
+USER www-data
+EXPOSE 8080
+CMD	[ "php", "-S", "[::]:8080", "-t", "/var/www/html" ]
