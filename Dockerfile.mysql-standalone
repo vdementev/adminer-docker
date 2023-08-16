@@ -14,14 +14,15 @@ RUN install-php-extensions \
     bz2 \
     opcache \
     pdo_mysql \
+    odbc \
     zip
 
 # Copy config files
 COPY ./php.ini /usr/local/etc/php/conf.d/01-php.ini
 
 WORKDIR /var/www/html
-COPY /app /var/www/html
-RUN chown -R www-data:www-data /var/www/html
+COPY --chown=www-data:www-data /app /var/www/html
+# RUN chown -R www-data:www-data /var/www/html
 USER www-data
 EXPOSE 8080
 CMD	[ "php", "-S", "[::]:8080", "-t", "/var/www/html" ]
