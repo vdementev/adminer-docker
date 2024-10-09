@@ -1,28 +1,36 @@
-FROM php:8.0-cli-alpine
+FROM php:8.3-cli-alpine3.20
 
 # Add some system packages
 RUN apk update && apk add --no-cache \
-    brotli \
-    && rm -rf /var/cache/apk/ \
-    && rm -rf /root/.cache \
-    && rm -rf /tmp/*
+    curl \
+    mariadb-connector-c \
+    mysql-client \
+    nano \
+    zip \
+    zstd
 
 # Add some PHP extensions
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 RUN install-php-extensions \
-    bcmath \
     bz2 \
-    opcache \
-    pdo_mysql \
+    Igbinary \
+    intl \
+    mysqli \
     odbc \
-    zip
+    opcache \
+    pcntl \
+    pdo_mysql \
+    soap \
+    timezonedb \
+    zip \
+    zstd
 
 # Copy config files
-COPY ./php.ini /usr/local/etc/php/conf.d/01-php.ini
+COPY ./conf/php.ini /usr/local/etc/php/conf.d/01-php.ini
 
-WORKDIR /var/www/html
-COPY --chown=www-data:www-data /app /var/www/html
-# RUN chown -R www-data:www-data /var/www/html
+WORKDIR /app
+COPY --chown=www-data:www-data /app /app
+
 USER www-data
 EXPOSE 8080
-CMD	[ "php", "-S", "[::]:8080", "-t", "/var/www/html" ]
+CMD	[ "php", "-S", "[::]:8080", "-t", "/app" ]

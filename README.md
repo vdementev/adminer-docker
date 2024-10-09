@@ -1,8 +1,5 @@
-# Adminer docker image
+# Adminer Evo docker image
 
-## Image
-
-Based on official PHP images. PHP version is 8.1
 
 ## Tags
 

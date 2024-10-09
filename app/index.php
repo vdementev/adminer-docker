@@ -9,6 +9,7 @@ function adminer_object()
     $pluginFiles = [
         'dump-date',
         'dump-zip',
+        'import-from-dir',
     ];
 
     $plugins = [];
