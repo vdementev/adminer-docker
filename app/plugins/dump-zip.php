@@ -7,10 +7,9 @@
  * @license https://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @license https://www.gnu.org/licenses/gpl-2.0.html GNU General Public License, version 2 (one or other)
  */
-class AdminerDumpZip
+class AdminerDumpZip extends Adminer\Plugin
 {
-	/** @access protected */
-	var $filename, $data;
+	protected $filename, $data;
 
 	function dumpOutput()
 	{
@@ -45,4 +44,12 @@ class AdminerDumpZip
 			ob_start(array($this, '_zip'));
 		}
 	}
+
+	protected $translations = array(
+		'cs' => array('' => 'Export do formátu ZIP'),
+		'de' => array('' => 'Export Im ZIP-Format'),
+		'pl' => array('' => 'Zrzuć do formatu ZIP'),
+		'ro' => array('' => 'Dump în format ZIP'),
+		'ja' => array('' => 'ZIP 形式でエクスポート'),
+	);
 }
