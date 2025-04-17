@@ -1,39 +1,27 @@
-FROM php:8.3-fpm-alpine3.21
+FROM php:8.4-fpm-alpine3.21
 
-# Add some system packages
-RUN apk update && apk upgrade && apk add --no-cache \
-    curl \
+# Add some packages
+RUN set -eux; \
+    apk update; \
+    apk upgrade --no-interactive; \
+    curl -sSLf -o /usr/local/bin/install-php-extensions \
+    https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
+    chmod +x /usr/local/bin/install-php-extensions; \
+    apk add \
     mariadb-connector-c \
     mysql-client \
     nano \
-    zip \
-    zstd \
     nginx \
-    nginx-mod-http-brotli \
-    supervisor && \
-    rm -rf /var/cache/apk/ && \
-    rm -rf /root/.cache && \
-    rm -rf /tmp/* && \
-    mkdir /nginx-cache && \
-    mkdir /nginx-fcache && \
-    echo "net.core.rmem_max=2500000 " >> /etc/sysctl.conf && \
-    echo "net.core.wmem_max=2500000 " >> /etc/sysctl.conf
-
-# Add some PHP extensions
-COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-RUN install-php-extensions \
-    bz2 \
-    Igbinary \
-    intl \
-    mysqli \
-    odbc \
-    opcache \
-    pcntl \
-    pdo_mysql \
-    soap \
-    timezonedb \
+    supervisor \
     zip \
-    zstd
+    zstd; \
+    install-php-extensions \
+    pdo_mysql \
+    zip \
+    zstd; \
+    chown -R www-data:www-data /var/lib/nginx; \
+    rm -rf /var/cache/apk/*
+
 
 # Copy config files
 COPY ./conf/php.ini /usr/local/etc/php/conf.d/01-php.ini
@@ -42,10 +30,8 @@ COPY ./conf/nginx.conf /etc/nginx/nginx.conf
 COPY ./conf/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 WORKDIR /app
-COPY --chown=www-data:www-data ./app /app
+COPY --chown=www-data:www-data /app /app
 
 # USER www-data
-EXPOSE 80
-HEALTHCHECK --interval=5s --timeout=1s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1/ping || exit 1
-
+EXPOSE 8080
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
