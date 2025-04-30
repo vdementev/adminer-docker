@@ -22,7 +22,7 @@ jobs:
           - dockerfile: Dockerfile.mysql-nginx
             version: "mysql"
             flavor: "nginx"
-          - dockerfile: Dockerfile.mysql-nginx
+          - dockerfile: Dockerfile.mysql-standalone
             version: "mysql"
             flavor: "standalone"
 
@@ -62,14 +62,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Slim it!
-        uses: kitabisa/docker-slim-action@v1
-        env:
-          DSLIM_HTTP_PROBE: false
-        with:
-          target: ${{ env.IMAGE_REPO }}:${{ matrix.version }}-${{ matrix.flavor }}
-          tag: "${{ matrix.version }}-${{ matrix.flavor }}-slim"
+      # - name: Slim it!
+      #   uses: kitabisa/docker-slim-action@v1
+      #   env:
+      #     DSLIM_HTTP_PROBE: false
+      #   with:
+      #     target: ${{ env.IMAGE_REPO }}:${{ matrix.version }}-${{ matrix.flavor }}
+      #     tag: "${{ matrix.version }}-${{ matrix.flavor }}-slim"
 
-      - name: Push slim image
-        run: |
-          docker push ${{ env.IMAGE_REPO }}:${{ matrix.version }}-${{ matrix.flavor }}-slim
+      # - name: Push slim image
+      #   run: |
+      #     docker push ${{ env.IMAGE_REPO }}:${{ matrix.version }}-${{ matrix.flavor }}-slim
