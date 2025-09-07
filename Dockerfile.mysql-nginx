@@ -1,5 +1,9 @@
 FROM php:8.4-fpm-alpine3.22
 
+WORKDIR /app
+
+COPY ./docker-entrypoint.sh /usr/local/bin/
+
 # Add some packages
 RUN set -eux; \
     apk update; \
@@ -7,31 +11,31 @@ RUN set -eux; \
     curl -sSLf -o /usr/local/bin/install-php-extensions \
     https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
     chmod +x /usr/local/bin/install-php-extensions; \
-    apk add \
-    mariadb-connector-c \
-    mysql-client \
+    apk add --no-cache \
+    dumb-init \
     nano \
-    nginx \
-    supervisor \
-    zip \
-    zstd; \
+    nginx ;\
     install-php-extensions \
     pdo_mysql \
     zip \
     zstd; \
     chown -R www-data:www-data /var/lib/nginx; \
-    rm -rf /var/cache/apk/*
-
+    chmod +x /usr/local/bin/docker-entrypoint.sh; \
+    rm -rf /var/cache/apk/*; \
+    rm -rf usr/local/etc/php-fpm/*; \
+    rm -rf php.ini-development; \
+    rm -rf php.ini-production; \
+    rm -rf /usr/local/bin/install-php-extensions
 
 # Copy config files
-COPY ./conf/php.ini /usr/local/etc/php/conf.d/01-php.ini
-COPY ./conf/www.conf /usr/local/etc/php-fpm.d/www.conf
+COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
+COPY ./conf/www.conf /usr/local/etc/php-fpm.conf
 COPY ./conf/nginx.conf /etc/nginx/nginx.conf
-COPY ./conf/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-WORKDIR /app
 COPY --chown=www-data:www-data /app /app
 
-# USER www-data
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:8080/ping.php || exit 1
+
 EXPOSE 8080
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
