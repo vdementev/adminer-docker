@@ -25,7 +25,9 @@ RUN set -eux; \
     rm -rf usr/local/etc/php-fpm/*; \
     rm -rf php.ini-development; \
     rm -rf php.ini-production; \
-    rm -rf /usr/local/bin/install-php-extensions
+    rm -rf /usr/local/bin/install-php-extensions; \
+    install -d -m 0777 -o www-data -g www-data /tmp/nginx/body; \
+    install -d -m 0777 -o www-data -g www-data /tmp/nginx/fastcgi_temp
 
 # Copy config files
 COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
