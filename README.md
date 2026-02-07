@@ -9,5 +9,3 @@
 ## Disclaimer
 
 I created this Docker image for my personal workflow, so it hasn't been tested in use cases beyond those I regularly work with.
-
-bump
