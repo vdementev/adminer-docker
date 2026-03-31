@@ -26,6 +26,9 @@ jobs:
           - dockerfile: Dockerfile.mysql-standalone
             version: "mysql"
             flavor: "standalone"
+          - dockerfile: Dockerfile.mysql-fcgi
+            version: "mysql"
+            flavor: "fcgi"
 
     steps:
       - name: Checkout repository
