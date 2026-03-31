@@ -1,6 +1,7 @@
 .git
 .github
 .gitignore
-.md
-.yml
+*.md
+*.yml
+Dockerfile*
 docker/*

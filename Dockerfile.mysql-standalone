@@ -1,31 +1,33 @@
 FROM php:8.4-cli-alpine3.23
+ENV IPE_ICU_EN_ONLY=1
+WORKDIR /app
 
-# Add some packages
+# Add packages and PHP extensions
 RUN set -eux; \
     apk update; \
     apk upgrade --no-interactive; \
     curl -sSLf -o /usr/local/bin/install-php-extensions \
     https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
     chmod +x /usr/local/bin/install-php-extensions; \
-    apk add \
+    apk add --no-cache \
+    dumb-init \
     mariadb-connector-c \
     mysql-client \
-    nano \
-    zip \
-    zstd; \
+    nano; \
     install-php-extensions \
     pdo_mysql \
     zip \
     zstd; \
-    rm -rf /var/cache/apk/*
-
+    rm -rf /var/cache/apk/*; \
+    rm -rf /usr/local/etc/php/php.ini-development; \
+    rm -rf /usr/local/etc/php/php.ini-production; \
+    rm -rf /usr/local/bin/install-php-extensions
 
 # Copy config files
-COPY ./conf/php.ini /usr/local/etc/php/conf.d/01-php.ini
-
-WORKDIR /app
+COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
 COPY --chown=www-data:www-data /app /app
 
 USER www-data
 EXPOSE 8080
-CMD	[ "php", "-S", "[::]:8080", "-t", "/app" ]
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["php", "-S", "[::]:8080", "-t", "/app"]
