@@ -25,27 +25,27 @@ has_ext() { docker exec "$1" php -m | grep -qx "$2"; }
 
 cleanup() {
     printf "\n${BOLD}Cleaning up...${NC}\n"
-    docker rm -f test-standalone test-nginx test-fcgi > /dev/null 2>&1 || true
+    docker rm -f test-standalone test-nginx test-fpm > /dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 cd "$(dirname "$0")"
 
 # Remove any leftover containers from a previous run
-docker rm -f test-standalone test-nginx test-fcgi > /dev/null 2>&1 || true
+docker rm -f test-standalone test-nginx test-fpm > /dev/null 2>&1 || true
 
 printf "${BOLD}Building images...${NC}\n"
 docker build -q -f Dockerfile.mysql-standalone -t adminer-test:standalone .
 pass "standalone built"
 docker build -q -f Dockerfile.mysql-nginx -t adminer-test:nginx .
 pass "nginx built"
-docker build -q -f Dockerfile.mysql-fcgi -t adminer-test:fcgi .
-pass "fcgi built"
+docker build -q -f Dockerfile.mysql-fpm -t adminer-test:fpm .
+pass "fpm built"
 
 printf "\n${BOLD}Starting containers...${NC}\n"
 docker run -d --name test-standalone -p 18080:8080 adminer-test:standalone > /dev/null
 docker run -d --name test-nginx -p 18081:8080 adminer-test:nginx > /dev/null
-docker run -d --name test-fcgi adminer-test:fcgi > /dev/null
+docker run -d --name test-fpm adminer-test:fpm > /dev/null
 sleep 4
 
 # --- standalone ---
@@ -76,19 +76,19 @@ check "ext zstd"                  'has_ext test-nginx zstd'
 check "cleanup: no php.ini-dev"   '! docker exec test-nginx test -f /usr/local/etc/php/php.ini-development'
 check "cleanup: no ipe binary"    '! docker exec test-nginx test -f /usr/local/bin/install-php-extensions'
 
-# --- fcgi ---
-printf "\n${BOLD}fcgi (php-fpm :9000)${NC}\n"
-check "container running"          'docker ps --format "{{.Names}}" | grep -q test-fcgi'
-check "runs as www-data"           '[ "$(docker exec test-fcgi whoami)" = "www-data" ]'
-check "php-fpm on :9000"          'docker exec test-fcgi php -r "@fsockopen(\"127.0.0.1\",9000) or exit(1);"'
-check "dumb-init PID 1"           'docker exec test-fcgi cat /proc/1/cmdline | tr "\0" " " | grep -q dumb-init'
-check "ext pdo_mysql"             'has_ext test-fcgi pdo_mysql'
-check "ext pdo_pgsql"             'has_ext test-fcgi pdo_pgsql'
-check "ext mongodb"               'has_ext test-fcgi mongodb'
-check "ext zip"                   'has_ext test-fcgi zip'
-check "ext zstd"                  'has_ext test-fcgi zstd'
-check "cleanup: no php.ini-dev"   '! docker exec test-fcgi test -f /usr/local/etc/php/php.ini-development'
-check "cleanup: no ipe binary"    '! docker exec test-fcgi test -f /usr/local/bin/install-php-extensions'
+# --- fpm ---
+printf "\n${BOLD}fpm (php-fpm :9000)${NC}\n"
+check "container running"          'docker ps --format "{{.Names}}" | grep -q test-fpm'
+check "runs as www-data"           '[ "$(docker exec test-fpm whoami)" = "www-data" ]'
+check "php-fpm on :9000"          'docker exec test-fpm php -r "@fsockopen(\"127.0.0.1\",9000) or exit(1);"'
+check "dumb-init PID 1"           'docker exec test-fpm cat /proc/1/cmdline | tr "\0" " " | grep -q dumb-init'
+check "ext pdo_mysql"             'has_ext test-fpm pdo_mysql'
+check "ext pdo_pgsql"             'has_ext test-fpm pdo_pgsql'
+check "ext mongodb"               'has_ext test-fpm mongodb'
+check "ext zip"                   'has_ext test-fpm zip'
+check "ext zstd"                  'has_ext test-fpm zstd'
+check "cleanup: no php.ini-dev"   '! docker exec test-fpm test -f /usr/local/etc/php/php.ini-development'
+check "cleanup: no ipe binary"    '! docker exec test-fpm test -f /usr/local/bin/install-php-extensions'
 
 # Results
 printf "\n${BOLD}Results: ${GREEN}%d passed${NC}" "$PASS"
