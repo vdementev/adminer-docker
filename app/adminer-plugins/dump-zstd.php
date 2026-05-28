@@ -1,87 +1,136 @@
 <?php
 
-/** Dump using Zstandard (zstd) compression
+/** Streaming Zstandard (zstd) export
+ *
+ * Uses the php-ext-zstd streaming context API (`zstd_compress_init` /
+ * `zstd_compress_add`) wired into an output-buffer callback so SQL is
+ * compressed chunk-by-chunk as Adminer emits it, never accumulating the
+ * whole dump in PHP memory.
+ *
+ * Notes:
+ *  - `ob_zstd_handler` in php-ext-zstd 0.15.x is a passthrough (does not
+ *    actually compress); we must drive the streaming API ourselves.
+ *  - `dumpHeaders()` MUST return a non-empty string equal to the underlying
+ *    format identifier ("sql"|"csv"|...). Adminer compares this with `==`
+ *    against "tar" elsewhere; returning a bool triggers PHP loose-equality
+ *    `true == "tar"` and Adminer enters tar-archive mode, wrapping the dump
+ *    in 512-byte tar headers.
+ *
+ * zstd at default level ≈ 5–10× faster than PHP's single-threaded gzip
+ * (`gzencode`) and produces a slightly denser file — suitable for multi-GB
+ * dumps over slow links without changing PHP/Angie/MySQL timeouts.
+ *
  * @link https://www.adminer.org/plugins/#use
- * @uses zstd_compress() (requires php-zstd PECL extension)
- * @author Jakub Vrana (original ZIP plugin), Modified for Zstd by Vasilii Dementev
+ * @uses zstd_compress_init / zstd_compress_add (kjdev/php-ext-zstd ≥ 0.13)
+ * @author Jakub Vrana (original ZIP plugin), zstd port by Vasilii Dementev
  * @license https://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @license https://www.gnu.org/licenses/gpl-2.0.html GNU General Public License, version 2 (one or other)
  */
 class AdminerDumpZstd extends Adminer\Plugin
 {
-    protected $data = ''; // Property to accumulate dump data
+    /** zstd streaming context, alive from dumpHeaders() until PHP_OUTPUT_HANDLER_FINAL */
+    private $ctx = null;
 
-    /**
-     * Add Zstandard option to the export output format list.
-     *
-     * @return array Associative array with 'zstd' key if zstd_compress function exists.
-     */
+    /** Compression level. 3 = zstd default; ~zlib level 7 ratio at ~5× speed. */
+    private $level = 3;
+
+    /** Add a "Zstandard" option to the Output radio group.
+     *  Value is "zst" so Adminer's filename builder appends ".zst" (the
+     *  conventional file extension). */
     function dumpOutput()
     {
-        if (!function_exists('zstd_compress')) {
+        if (!function_exists('zstd_compress_init')) {
             return array();
         }
-        return array('zstd' => 'Zstandard');
+        return array('zst' => 'Zstandard (zst)');
     }
 
     /**
-     * Callback function for output buffering to compress the data using zstd.
+     * Set Content-Type and start the streaming compressor.
      *
-     * @param string $string Chunk of data from the output buffer.
-     * @param int $state Output buffer state flags (e.g., PHP_OUTPUT_HANDLER_START, PHP_OUTPUT_HANDLER_END).
-     * @return string Compressed data when buffer ends, empty string otherwise. Returns false on compression error.
-     */
-    function _compressZstd($string, $state)
-    {
-        $this->data .= $string;
-        if ($state & PHP_OUTPUT_HANDLER_END) {
-            $compressed_data = zstd_compress($this->data);
-            $this->data = '';
-            if ($compressed_data === false) {
-                error_log("AdminerDumpZstd: zstd_compress failed.");
-                return false;
-            }
-            return $compressed_data;
-        }
-        return "";
-    }
-
-    /**
-     * Set appropriate headers for zstd download and start output buffering.
-     *
-     * @param string $identifier Base filename (usually database or table name).
-     * @param bool $multi_table Whether multiple tables are being dumped (affects CSV/TSV extension).
-     * @return null|bool Returns null if the output format is not 'zstd', potentially bool from ob_start.
+     * @return string|null The format identifier ("sql"/"csv"/...) so Adminer
+     *                     knows what extension to embed in the filename
+     *                     (`<identifier>.<format>.<output>`), and so that
+     *                     loose comparisons against "tar" stay false.
+     *                     Returning null defers to the default handler.
      */
     function dumpHeaders($identifier, $multi_table = false)
     {
-        if (isset($_POST["output"]) && $_POST["output"] == "zstd") {
-            $extension = (isset($_POST["format"]) ? $_POST["format"] : 'sql');
-            if ($multi_table && preg_match("~^[ct]sv~", $extension)) {
-                $extension = "tar"; // Although zstd compresses the tar, not creates it here
-            }
-            $filename = "$identifier.$extension.zst";
-            header("Content-Type: application/zstd");
-            // Set the Content-Disposition header to suggest the filename to the browser
-            // Use 'attachment' to force download
-            header("Content-Disposition: attachment; filename=\"" . addslashes($filename) . "\"");
-            $this->data = '';
-            return ob_start(array($this, '_compressZstd'));
+        if (($_POST['output'] ?? '') !== 'zst') {
+            return null;
         }
-        return null;
+
+        // Mirror Adminer's default format resolution.
+        $format = preg_match('~sql~', $_POST['format'] ?? '')
+            ? 'sql'
+            : ($multi_table ? 'tar' : 'csv');
+
+        header('Content-Type: application/zstd');
+        // Adminer will set Content-Disposition itself, using `<dumpFilename>.<format>.zst`.
+
+        $this->ctx = zstd_compress_init($this->level);
+
+        self::tuneDumpSession();
+
+        // Trigger the callback every 64 KiB so memory stays bounded.
+        ob_start(array($this, 'compressChunk'), 65536);
+
+        return $format;
     }
 
     /**
-     * Translations for the UI element.
+     * Per-session MySQL pragmas to skip work we don't need during a dump.
+     * Mirrors `AdminerDumpProcOpenBase::tuneDumpSession()` — see that file
+     * for the rationale. Kept duplicated rather than via a shared trait
+     * because Adminer's `Plugins` constructor auto-instantiates every
+     * declared subclass of `Adminer\Plugin`, and an abstract shared base
+     * class would error out.
      */
+    private static function tuneDumpSession(): void
+    {
+        $conn = Adminer\connection();
+        if (!$conn) {
+            return;
+        }
+        @$conn->query('SET SESSION slow_query_log = 0');
+        @$conn->query('SET SESSION long_query_time = 31536000');
+        @$conn->query('SET SESSION sql_log_off = 1');
+        @$conn->query('SET SESSION sql_log_bin = 0');
+        @$conn->query('SET SESSION net_read_timeout = 14400');
+        @$conn->query('SET SESSION net_write_timeout = 14400');
+        @$conn->query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        @$conn->query('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+    }
+
+    /** ob_start callback: compress each chunk via the streaming context. */
+    function compressChunk($string, $state)
+    {
+        if ($this->ctx === null) {
+            return $string;
+        }
+
+        // `end=false` keeps the frame open; on FINAL we issue a separate
+        // `end=true` call that writes the zstd epilogue + checksum.
+        // (php-ext-zstd 0.15: empty input alone is a no-op; you must pass
+        //  the bool `end` parameter to terminate the stream.)
+        $out = ($string === '') ? '' : zstd_compress_add($this->ctx, $string, false);
+
+        if ($state & PHP_OUTPUT_HANDLER_FINAL) {
+            $out .= zstd_compress_add($this->ctx, '', true);
+            $this->ctx = null;
+        }
+
+        return $out;
+    }
+
     protected $translations = array(
-        'cs' => array('Zstandard' => 'Zstandard komprese'), // Czech
-        'de' => array('Zstandard' => 'Zstandard Kompression'), // German
-        'fr' => array('Zstandard' => 'Compression Zstandard'), // French
-        'es' => array('Zstandard' => 'Compresión Zstandard'), // Spanish
-        'pl' => array('Zstandard' => 'Kompresja Zstandard'),    // Polish
-        'ru' => array('Zstandard' => 'Сжатие Zstandard'),      // Russian
-        'ja' => array('Zstandard' => 'Zstandard 圧縮'),        // Japanese
-        'zh' => array('Zstandard' => 'Zstandard 压缩'),        // Chinese
+        'cs' => array('Zstandard (zst)' => 'Zstandard komprese'),
+        'de' => array('Zstandard (zst)' => 'Zstandard Kompression'),
+        'fr' => array('Zstandard (zst)' => 'Compression Zstandard'),
+        'es' => array('Zstandard (zst)' => 'Compresión Zstandard'),
+        'pl' => array('Zstandard (zst)' => 'Kompresja Zstandard'),
+        'ru' => array('Zstandard (zst)' => 'Сжатие Zstandard'),
+        'ja' => array('Zstandard (zst)' => 'Zstandard 圧縮'),
+        'zh' => array('Zstandard (zst)' => 'Zstandard 压缩'),
     );
 }
