@@ -103,11 +103,29 @@ trait AdminerProcOpenCompressTrait
 
         header('Content-Type: ' . $this->contentType());
 
+        // Adminer's `dump_headers()` wrapper builds Content-Disposition as
+        //   <dumpFilename>.<format>.<output-value>
+        // — so output=pigz would land us at `dump.sql.pigz` even though the
+        // body is a standard gzip stream. Override at send time so the
+        // radio-button value never doubles as the file extension.
+        $base = \Adminer\adminer()->dumpFilename($identifier);
+        $fixedFilename = $base . '.' . $format . '.' . $this->fileExtension();
+        header_register_callback(function () use ($fixedFilename) {
+            header(
+                'Content-Disposition: attachment; filename="'
+                    . addslashes($fixedFilename) . '"',
+                true
+            );
+        });
+
         // Bounded buffer — each callback gets at most ~64 KiB of raw SQL.
         ob_start(array($this, 'pipeChunk'), 65536);
 
         return $format;
     }
+
+    /** File extension to advertise on the response (e.g. "gz", "zst"). */
+    abstract protected function fileExtension(): string;
 
     /**
      * Issue per-session MySQL pragmas that skip work we don't need during a
@@ -245,9 +263,10 @@ class AdminerDumpPigz extends Adminer\Plugin
 {
     use AdminerProcOpenCompressTrait;
 
-    private function key(): string         { return 'pigz'; }
-    private function label(): string       { return 'gzip (pigz, parallel)'; }
-    private function contentType(): string { return 'application/gzip'; }
+    private function key(): string             { return 'pigz'; }
+    private function label(): string           { return 'gzip (pigz, parallel)'; }
+    private function contentType(): string     { return 'application/gzip'; }
+    protected function fileExtension(): string { return 'gz'; }
 
     private function isAvailable(): bool
     {
@@ -279,9 +298,10 @@ class AdminerDumpPzst extends Adminer\Plugin
 {
     use AdminerProcOpenCompressTrait;
 
-    private function key(): string         { return 'pzst'; }
-    private function label(): string       { return 'Zstandard (zstd CLI, parallel)'; }
-    private function contentType(): string { return 'application/zstd'; }
+    private function key(): string             { return 'pzst'; }
+    private function label(): string           { return 'Zstandard (zstd CLI, parallel)'; }
+    private function contentType(): string     { return 'application/zstd'; }
+    protected function fileExtension(): string { return 'zst'; }
 
     private function isAvailable(): bool
     {

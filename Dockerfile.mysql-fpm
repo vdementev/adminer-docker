@@ -6,21 +6,17 @@ WORKDIR /app
 # Add packages and PHP extensions
 RUN set -eux; \
     apt-get update; \
-    apt-get -y upgrade; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         default-mysql-client \
         dumb-init \
-        nano \
         pigz \
-        pv \
         zstd; \
     curl -sSLf -o /usr/local/bin/install-php-extensions \
         https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
     chmod +x /usr/local/bin/install-php-extensions; \
     install-php-extensions \
-        mongodb \
         pdo_mysql \
         pdo_pgsql \
         zip \

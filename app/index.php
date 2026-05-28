@@ -43,7 +43,6 @@ function adminer_object()
         \AdminerVersionNoverify::class,   // disable "new version available" check
         \AdminerDarkSwitcher::class,      // dark mode toggle
         \AdminerQueryLog::class,          // log executed queries
-        // \AdminerMongo::class,          // enable if you actually use MongoDB
     ];
 
     $plugins = [];
