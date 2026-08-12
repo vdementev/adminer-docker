@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile.mysql-nginx
+            tag: mysql-nginx
+          - dockerfile: Dockerfile.mysql-standalone
+            tag: mysql-standalone
+          - dockerfile: Dockerfile.mysql-fpm
+            tag: mysql-fpm
+    uses: vdementev/docker-workflows/.github/workflows/build-image.yml@v1
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      image: adminer
+      dockerfile: ${{ matrix.dockerfile }}
+      cache-scope: ${{ matrix.tag }}
+      push: ${{ github.event_name != 'pull_request' }}
+      tags: |
+        type=raw,value=${{ matrix.tag }}
+      labels: |
+        org.opencontainers.image.title=adminer (${{ matrix.tag }})
+        org.opencontainers.image.description=Adminer 5 for MySQL — parallel zstd/gzip dumps, fast restore, hardening.
+        org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+        org.opencontainers.image.revision=${{ github.sha }}
+        org.opencontainers.image.licenses=MIT
+    secrets: inherit
