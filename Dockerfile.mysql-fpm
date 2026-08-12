@@ -6,6 +6,7 @@ WORKDIR /app
 # Add packages and PHP extensions
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
