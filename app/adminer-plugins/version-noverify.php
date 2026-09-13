@@ -9,9 +9,9 @@
 class AdminerVersionNoverify extends Adminer\Plugin
 {
 
-	function head($dark = null)
+	function verifyVersion()
 	{
-		echo Adminer\script("verifyVersion = () => { };");
+		return false;
 	}
 
 	protected $translations = array(
