@@ -132,9 +132,16 @@ trait AdminerProcOpenCompressTrait
      * dump. All are best-effort — some require SYSTEM_VARIABLES_ADMIN /
      * SESSION_VARIABLES_ADMIN; failures are silently ignored so a low-privilege
      * Adminer user still gets a working dump (just without the speedup).
+     *
+     * MySQL/MariaDB only — every statement below is MySQL syntax. The
+     * compressors themselves are driver-agnostic and stay available on
+     * PostgreSQL, SQLite, MS SQL, Oracle and the rest.
      */
     private static function tuneDumpSession(): void
     {
+        if (!defined('Adminer\\DRIVER') || \Adminer\DRIVER !== 'server') {
+            return;
+        }
         $conn = Adminer\connection();
         if (!$conn) {
             return;

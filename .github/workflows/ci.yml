@@ -37,7 +37,7 @@ jobs:
         type=raw,value=${{ matrix.tag }}
       labels: |
         org.opencontainers.image.title=adminer (${{ matrix.tag }})
-        org.opencontainers.image.description=Adminer 5 for MySQL — parallel zstd/gzip dumps, fast restore, hardening.
+        org.opencontainers.image.description=Adminer 6 for MySQL, PostgreSQL, SQLite, MS SQL, Oracle, MongoDB, ClickHouse, Elasticsearch, Redis and SimpleDB — parallel zstd/gzip dumps, fast restore, hardening.
         org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
         org.opencontainers.image.revision=${{ github.sha }}
         org.opencontainers.image.licenses=MIT

@@ -3,7 +3,13 @@ ENV IPE_ICU_EN_ONLY=1 \
     DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# Add packages and PHP extensions
+# Oracle's Instant Client is ~100 MB of the image and only the (beta) Oracle
+# driver needs it — build with --build-arg WITH_ORACLE=false to drop it.
+ARG WITH_ORACLE=true
+
+COPY ./docker-entrypoint.sh /usr/local/bin/
+
+# See Dockerfile.mysql-nginx for what each extension is there for.
 RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y; \
@@ -13,15 +19,32 @@ RUN set -eux; \
         default-mysql-client \
         dumb-init \
         pigz \
+        sqlite3 \
         zstd; \
+    # PostgreSQL client from PGDG, not Debian: trixie ships pg_dump 17, which
+    # refuses to dump an 18+ server. 18 reads everything back to 9.2.
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl -sSLf -o /etc/apt/keyrings/pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-18; \
     curl -sSLf -o /usr/local/bin/install-php-extensions \
         https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
     chmod +x /usr/local/bin/install-php-extensions; \
     install-php-extensions \
+        mongodb \
+        mysqli \
+        pdo_dblib \
         pdo_mysql \
         pdo_pgsql \
+        pdo_sqlsrv \
+        pgsql \
+        sqlsrv \
         zip \
         zstd; \
+    if [ "$WITH_ORACLE" = "true" ]; then install-php-extensions oci8 pdo_oci; fi; \
+    chmod +x /usr/local/bin/docker-entrypoint.sh; \
     rm -f /usr/local/etc/php/php.ini-development /usr/local/etc/php/php.ini-production; \
     rm -f /usr/local/bin/install-php-extensions; \
     apt-get clean; \
@@ -29,9 +52,13 @@ RUN set -eux; \
 
 # Copy config files
 COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
+COPY ./conf/php-standalone.ini /usr/local/etc/php/conf.d/999-standalone.ini
 COPY --chown=www-data:www-data /app /app
+
+HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:8080/ping.php || exit 1
 
 USER www-data
 EXPOSE 8080
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["php", "-S", "[::]:8080", "-t", "/app"]
+ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/docker-entrypoint.sh"]
+CMD ["standalone"]

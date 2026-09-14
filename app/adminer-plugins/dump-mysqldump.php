@@ -43,9 +43,12 @@ class AdminerDumpMysqldumpZstd extends Adminer\Plugin
         if (!is_executable('/usr/bin/mysqldump') || !is_executable('/usr/bin/zstd')) {
             return array();
         }
-        // Adminer driver constant — only the "server" (MySQL) driver supports
-        // mysqldump. We don't gate on it strictly to avoid namespace-resolution
-        // brittleness; mysqldump will fail loudly on non-MySQL backends.
+        // "server" is Adminer's driver key for MySQL/MariaDB. The image also
+        // ships PostgreSQL, SQLite, MS SQL, Oracle, MongoDB … — offering
+        // mysqldump on any of those would just produce a confusing failure.
+        if (!defined('Adminer\\DRIVER') || \Adminer\DRIVER !== 'server') {
+            return array();
+        }
         return array('mzst' => 'mysqldump → zstd (fastest, native)');
     }
 

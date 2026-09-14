@@ -25,6 +25,12 @@ class AdminerFastRestoreLink extends Adminer\Plugin
             return null;
         }
 
+        // restore.php pipes the upload into the `mysql` client, so the link
+        // only makes sense on MySQL/MariaDB ("server" is Adminer's key for it).
+        if (!defined('Adminer\\DRIVER') || \Adminer\DRIVER !== 'server') {
+            return null;
+        }
+
         $params = $this->prefillParams();
         $url = 'restore.php' . ($params ? '?' . http_build_query($params) : '');
 
