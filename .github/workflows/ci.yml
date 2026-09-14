@@ -42,6 +42,19 @@ jobs:
       cache-scope: ${{ matrix.tag }}
       platforms: linux/amd64
       push: ${{ github.event_name != 'pull_request' }}
+      # Smoke-tests the locally built image before it can be published: user,
+      # extensions, clients, drivers offered, and the flavor-specific checks
+      # (nginx headers/compression, fpm pool sizing, standalone CLI server).
+      # $IMAGE is set by the reusable workflow; FLAVOR picks which of
+      # tests.sh's three suites runs against it.
+      test-command: FLAVOR=${{ matrix.tag }} ./tests.sh
+      # Adminer's own version, read out of the vendored app in the image that
+      # just passed the tests, gives 6.0.2-<flavor> and 6.0-<flavor> next to
+      # the moving flavor tags.
+      version-command: >-
+        docker run --rm --entrypoint sh "$IMAGE"
+        -c "grep -m1 -oaE '@version [0-9.]+' /app/adminer.php | cut -d' ' -f2"
+      version-tag-suffix: -${{ matrix.tag }}
       tags: |
         type=raw,value=${{ matrix.tag }}
         type=raw,value=${{ matrix.legacy }}
@@ -49,8 +62,12 @@ jobs:
       labels: |
         org.opencontainers.image.title=adminer (${{ matrix.tag }})
         org.opencontainers.image.description=Adminer 6 for MySQL, PostgreSQL, SQLite, MS SQL, Oracle, MongoDB, ClickHouse, Elasticsearch, Redis and SimpleDB — parallel zstd/gzip dumps, fast restore, hardening.
+        org.opencontainers.image.url=https://hub.docker.com/r/dementev/adminer
+        org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}#readme
         org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
         org.opencontainers.image.revision=${{ github.sha }}
+        org.opencontainers.image.vendor=Lotus Web Agency
+        org.opencontainers.image.authors=Vasilii Dementev https://vasiliidementev.com
         org.opencontainers.image.licenses=MIT
     secrets: inherit
 

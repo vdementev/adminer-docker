@@ -1,4 +1,15 @@
 FROM php:8.4-cli-trixie
+
+# OCI metadata. CI adds revision/version/created on top of these.
+LABEL org.opencontainers.image.title="adminer (standalone)" \
+      org.opencontainers.image.description="Adminer 6 with every driver it supports — PHP's built-in server on :8080. Parallel zstd/gzip dumps, native mysqldump/pg_dump export, fast restore." \
+      org.opencontainers.image.url="https://hub.docker.com/r/dementev/adminer" \
+      org.opencontainers.image.documentation="https://github.com/vdementev/adminer-docker#readme" \
+      org.opencontainers.image.source="https://github.com/vdementev/adminer-docker" \
+      org.opencontainers.image.vendor="Lotus Web Agency" \
+      org.opencontainers.image.authors="Vasilii Dementev https://vasiliidementev.com" \
+      org.opencontainers.image.licenses="MIT"
+
 ENV IPE_ICU_EN_ONLY=1 \
     DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -9,7 +20,7 @@ ARG WITH_ORACLE=true
 
 COPY ./docker-entrypoint.sh /usr/local/bin/
 
-# See Dockerfile.mysql-nginx for what each extension is there for.
+# See Dockerfile.nginx for what each extension is there for.
 RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y; \

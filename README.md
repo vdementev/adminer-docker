@@ -1,16 +1,36 @@
-# Adminer 6 docker image
+# adminer
 
-Adminer 6 with every database driver it knows about, native parallel dumps and
-a pool that sizes itself to the container's CPU.
+Adminer 6 with every database driver it knows about, native parallel dumps, a
+fast restore path, and a worker pool that sizes itself to the container's CPU
+allowance.
+
+Published as [`dementev/adminer`](https://hub.docker.com/r/dementev/adminer).
+
+```yaml
+services:
+  adminer:
+    image: dementev/adminer:latest
+    ports: ["127.0.0.1:8080:8080"]
+```
+
+Bind it to loopback or put it behind the authentication you already have — this
+is a database client with a login form, not something to publish.
 
 ## Tags
 
-- `latest`, `nginx` - nginx and php-fpm version on port 8080. RECOMENDED
-- `standalone` - standalone version using php build-in web server on port 8080.
-- `fpm` - bare php-fpm on port 9000, for an existing web server.
+| Tag | What it is |
+|---|---|
+| `latest`, `nginx` | nginx + php-fpm on `:8080`. Use this one unless you have a reason not to. |
+| `standalone` | PHP's built-in server on `:8080`. Fewer moving parts. |
+| `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
+| `6.0.2-nginx`, `6.0-nginx`, … | The same flavors, pinned to an Adminer version. |
+
+Version tags are read out of the image *after* it is built and tested, so a tag
+can never claim an Adminer version the image does not contain. Lifecycle and
+pinning: [SUPPORT.md](SUPPORT.md).
 
 The old `mysql-nginx` / `mysql-standalone` / `mysql-fpm` tags still point at the
-same images so nothing breaks, but they're aliases now — the images stopped
+same digests so nothing breaks, but they are aliases now — the images stopped
 being MySQL-only. `linux/amd64` only.
 
 ## Databases
@@ -73,6 +93,65 @@ Everything it sets can be overridden:
 | `ADMINER_PORT` | `8080` | standalone |
 | `MONGO_AUTH_SOURCE` | — | the MongoDB driver |
 
-## Disclaimer
+## Tests
 
-I created this Docker image for my personal workflow, so it hasn't been tested in use cases beyond those I regularly work with.
+`./tests.sh` builds all three flavors and asserts what the image promises: it
+runs as `www-data`, dumb-init is PID 1, every database extension and client
+binary is present, all ten drivers are offered on the login page, the pool sizes
+itself, and the nginx flavor sends its hardening headers and compresses HTML but
+not the export streams. CI runs the same script per flavor against the built
+image before anything can be published
+(`IMAGE=… FLAVOR=nginx ./tests.sh` to test one you already have).
+
+## Security and provenance
+
+Every published digest is built by the shared pipeline in
+[vdementev/docker-workflows](https://github.com/vdementev/docker-workflows).
+Pull requests build, test and scan without publishing; `main` is
+branch-protected, so nothing reaches Docker Hub without a green check behind it.
+A Trivy gate fails the build on any *fixable* CRITICAL or HIGH finding, and each
+published digest carries an SBOM, max-mode SLSA provenance and a keyless Cosign
+signature.
+
+Verify what you pulled:
+
+```sh
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp 'github.com/vdementev/' \
+  dementev/adminer:latest
+```
+
+[SECURITY.md](SECURITY.md) is the reporting channel and the response
+targets; [SUPPORT.md](SUPPORT.md) covers tag lifecycle, pinning and
+patch cadence.
+
+## Related images
+
+One family, built by the same pipeline, meant to run together — a proxy in
+front, an app runtime, a database, and a way into it.
+
+| Image | What it does |
+|---|---|
+| [`dementev/angie`](https://hub.docker.com/r/dementev/angie) — [source](https://github.com/vdementev/angie-docker) | Public-facing reverse proxy and TLS terminator — Angie, the nginx fork, with brotli, zstd and cache-purge |
+| [`dementev/nginx`](https://hub.docker.com/r/dementev/nginx) — [source](https://github.com/vdementev/nginx-docker) | Static sites and SPAs behind that proxy — brotli/zstd siblings, Prometheus stub_status |
+| [`dementev/php-fpm-with-ext`](https://hub.docker.com/r/dementev/php-fpm-with-ext) — [source](https://github.com/vdementev/docker-php-fpm-with-ext) | PHP-FPM and CLI, PHP 7.0 → 8.5, with the extensions most projects reach for |
+| [`dementev/mysql-percona`](https://hub.docker.com/r/dementev/mysql-percona) — [source](https://github.com/vdementev/mysql-percona-docker) | Percona Server for MySQL 8.4 LTS, XtraBackup built in, no root inside |
+| **[`dementev/adminer`](https://hub.docker.com/r/dementev/adminer)** — this image | Adminer 6 with every driver it supports, for reaching any of the above |
+
+## Maintainer
+
+Built and maintained by [Vasilii Dementev](https://vasiliidementev.com) at
+[Lotus Web Agency](https://lotuswebagency.com). These images are not a side
+project — they are the base layer under the client and product systems we run,
+which is why they are gated, tested and signed rather than pushed by hand.
+
+Issues and pull requests:
+[github.com/vdementev/adminer-docker](https://github.com/vdementev/adminer-docker).
+Need this kind of infrastructure built or maintained for your own stack?
+[lotuswebagency.com](https://lotuswebagency.com).
+
+Packaging, the plugins under `app/adminer-plugins/` and the configuration in
+this repository are MIT licensed — see [LICENSE](LICENSE). Adminer itself is
+vendored from [adminer.org](https://www.adminer.org/) and keeps its own license
+(Apache 2.0 or GPL 2), as do the upstream driver plugins.
