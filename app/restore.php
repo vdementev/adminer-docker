@@ -4,12 +4,16 @@
  * Fast Database Restore — companion page to Adminer
  *
  * Receives an uploaded SQL dump (.sql, .sql.gz, or .sql.zst), then shells out
- * to native CLI:  decompressor | mysql --defaults-extra-file=…
+ * to the native CLI:
  *
- * Pairs with the `dump-mysqldump.php` Adminer plugin: that one produces the
- * .sql.zst, this one ingests it. End-to-end the path stays in C-land
- * (mysqldump / zstd / mysql), bypassing Adminer's row-by-row PHP iteration
- * for ~order-of-magnitude speedup vs the built-in Adminer import.
+ *   MySQL/MariaDB   decompressor | mysql --defaults-extra-file=…
+ *   PostgreSQL      decompressor | psql --single-transaction -v ON_ERROR_STOP=1
+ *
+ * Pairs with the `dump-mysqldump.php` / `dump-pgdump.php` Adminer plugins:
+ * those produce the .sql.zst, this one ingests it. End-to-end the path stays
+ * in C-land (mysqldump / pg_dump / zstd / mysql / psql), bypassing Adminer's
+ * row-by-row PHP iteration for ~order-of-magnitude speedup vs the built-in
+ * Adminer import.
  *
  * Workflow guarantee — "upload first, then restore":
  *   PHP's multipart handler buffers the entire POST body to `upload_tmp_dir`
@@ -47,10 +51,10 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// Auth gate: require the user to have an active Adminer cookie. The MySQL
-// credentials posted to this page are validated by mysql/mysqldump on
-// their own (wrong → fail loudly), so this just stops random scanners
-// from probing the form.
+// Auth gate: require the user to have an active Adminer cookie. The database
+// credentials posted to this page are validated by the client binary on its
+// own (wrong → fail loudly), so this just stops random scanners from probing
+// the form.
 if (empty($_COOKIE['adminer_sid'])) {
     header('Location: ./');
     exit;
@@ -72,9 +76,16 @@ function fmtBytes(int $n): string
 $msg = '';
 $ok  = false;
 
+// Which client to pipe into. The Fast Restore link passes ?engine= from the
+// driver of the current Adminer connection; the form can override it.
+$engine = (($_POST['engine'] ?? $_GET['engine'] ?? '') === 'pgsql') ? 'pgsql' : 'mysql';
+$engineName  = ($engine === 'pgsql' ? 'PostgreSQL' : 'MySQL');
+$clientName  = ($engine === 'pgsql' ? 'psql' : 'mysql');
+$defaultPort = ($engine === 'pgsql' ? 5432 : 3306);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['dump']['tmp_name'])) {
     $host = trim((string)($_POST['host']     ?? ''));
-    $port = (int)         ($_POST['port']     ?? 3306);
+    $port = (int)         ($_POST['port']     ?? $defaultPort);
     $user = trim((string)($_POST['user']     ?? ''));
     $pass =      (string)($_POST['password'] ?? '');
     $db   = trim((string)($_POST['db']       ?? ''));
@@ -108,28 +119,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['dump']['tmp_name'])
                 $fmt    = 'plain SQL';
             }
 
-            // ---- Defaults file (keeps password out of argv) ------------
-            $cnf = (string)tempnam('/tmp', 'restore-cnf-');
-            chmod($cnf, 0600);
-            $pwEsc = '"' . addcslashes($pass, "\\\"") . '"';
-            file_put_contents($cnf, sprintf(
-                "[client]\nhost = %s\nport = %d\nuser = %s\npassword = %s\n",
-                $host, $port, $user, $pwEsc
-            ));
+            // ---- Credentials, kept out of argv --------------------------
+            // mysql reads them from a 0600 defaults file, psql from the
+            // environment; either way `/proc/<pid>/cmdline` stays clean.
+            $cnf = '';
+            $env = null;
+            if ($engine === 'mysql') {
+                $cnf = (string)tempnam('/tmp', 'restore-cnf-');
+                chmod($cnf, 0600);
+                $pwEsc = '"' . addcslashes($pass, "\\\"") . '"';
+                file_put_contents($cnf, sprintf(
+                    "[client]\nhost = %s\nport = %d\nuser = %s\npassword = %s\n",
+                    $host, $port, $user, $pwEsc
+                ));
+            } else {
+                // proc_open() replaces the environment wholesale, so PATH has
+                // to be spelled out for the shell running the pipeline.
+                $env = [
+                    'PGPASSWORD'        => $pass,
+                    'PGCONNECT_TIMEOUT' => '30',
+                    'PATH'              => '/usr/local/bin:/usr/bin:/bin',
+                    'LANG'              => 'C.UTF-8',
+                ];
+            }
             // Be sure both temp files are cleaned up even on fatal errors.
             register_shutdown_function(function () use ($cnf, $staged) {
-                @unlink($cnf);
+                if ($cnf !== '') {
+                    @unlink($cnf);
+                }
                 @unlink($staged);
             });
 
             // ---- Build & run pipeline -----------------------------------
-            $cmd = sprintf(
-                '%s < %s | /usr/bin/mysql --defaults-extra-file=%s --ssl-verify-server-cert=0 --default-character-set=utf8mb4 %s 2>&1',
-                $decomp,
-                escapeshellarg($staged),
-                escapeshellarg($cnf),
-                escapeshellarg($db)
-            );
+            if ($engine === 'mysql') {
+                $cmd = sprintf(
+                    '%s < %s | /usr/bin/mysql --defaults-extra-file=%s --ssl-verify-server-cert=0 --default-character-set=utf8mb4 %s 2>&1',
+                    $decomp,
+                    escapeshellarg($staged),
+                    escapeshellarg($cnf),
+                    escapeshellarg($db)
+                );
+            } else {
+                // ON_ERROR_STOP + single transaction: a failed restore rolls
+                // back instead of leaving the database half-written, and the
+                // exit code actually reflects it.
+                $cmd = sprintf(
+                    '%s < %s | /usr/bin/psql --host=%s --port=%d --username=%s --dbname=%s'
+                    . ' --no-password --quiet --single-transaction -v ON_ERROR_STOP=1',
+                    $decomp,
+                    escapeshellarg($staged),
+                    escapeshellarg($host),
+                    $port,
+                    escapeshellarg($user),
+                    escapeshellarg($db)
+                );
+            }
 
             $startedAt = microtime(true);
 
@@ -140,7 +184,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['dump']['tmp_name'])
                     1 => ['pipe', 'w'],
                     2 => ['pipe', 'w'],
                 ],
-                $pipes
+                $pipes,
+                null,
+                $env
             );
 
             if (!is_resource($proc)) {
@@ -160,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['dump']['tmp_name'])
                     $msg = sprintf(
                         "Restore completed in %.2f s.\n"
                         . "  file:   %s (%s, %s)\n"
-                        . "  target: %s on %s:%d as %s\n",
+                        . "  target: %s on %s:%d as %s ($engineName)\n",
                         $elapsed,
                         $_FILES['dump']['name'],
                         fmtBytes($stagedSize),
@@ -168,16 +214,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['dump']['tmp_name'])
                         $db, $host, $port, $user
                     );
                     if (trim($stdout) !== '') {
-                        $msg .= "\n--- mysql stdout ---\n" . $stdout;
+                        $msg .= "\n--- $clientName stdout ---\n" . $stdout;
                     }
                     if (trim($stderr) !== '') {
-                        $msg .= "\n--- mysql stderr (warnings) ---\n" . $stderr;
+                        $msg .= "\n--- $clientName stderr (warnings) ---\n" . $stderr;
                     }
                 } else {
                     $msg = sprintf(
                         "Restore FAILED (exit code %d, %.2f s).\n"
                         . "  file: %s (%s, %s)\n\n"
-                        . "--- mysql stdout ---\n%s\n--- mysql stderr ---\n%s",
+                        . "--- $clientName stdout ---\n%s\n--- $clientName stderr ---\n%s",
                         $rc, $elapsed,
                         $_FILES['dump']['name'],
                         fmtBytes($stagedSize),
@@ -209,7 +255,7 @@ $prefill = function (string $key, string $fallback = '') {
   fieldset { border: 1px solid #ccc; padding: 1em 1.5em; margin: 1em 0; border-radius: 6px; }
   legend { padding: 0 0.5em; font-weight: bold; }
   label { display: block; margin: 0.7em 0 0.2em; font-weight: 500; }
-  input[type=text], input[type=password], input[type=number], input[type=file] {
+  input[type=text], input[type=password], input[type=number], input[type=file], select {
     width: 100%; padding: 0.45em; box-sizing: border-box;
     border: 1px solid #aaa; border-radius: 4px; font: inherit;
   }
@@ -230,7 +276,7 @@ $prefill = function (string $key, string $fallback = '') {
 <a class="back" href="./">← Adminer</a>
 <h1>Fast Database Restore</h1>
 <p class="desc">
-  Pipes the uploaded SQL dump through the native <code>mysql</code> client.
+  Pipes the uploaded SQL dump through the native <code>mysql</code> or <code>psql</code> client.
   Bypasses Adminer's PHP row iteration — roughly an order of magnitude faster on multi-GB dumps.
   Detected formats: <code>.sql</code>, <code>.sql.gz</code>, <code>.sql.zst</code>.
 </p>
@@ -241,19 +287,26 @@ $prefill = function (string $key, string $fallback = '') {
 
 <form method="post" enctype="multipart/form-data">
   <fieldset>
-    <legend>Target MySQL</legend>
+    <legend>Target</legend>
     <div class="row">
       <div>
+        <label>Engine</label>
+        <select name="engine" id="engine">
+          <option value="mysql"<?= $engine === 'mysql' ? ' selected' : '' ?>>MySQL / MariaDB</option>
+          <option value="pgsql"<?= $engine === 'pgsql' ? ' selected' : '' ?>>PostgreSQL</option>
+        </select>
+      </div>
+      <div>
         <label>Host</label>
-        <input type="text" name="host" required value="<?= h($prefill('host', 'mysql-primary')) ?>">
+        <input type="text" name="host" required value="<?= h($prefill('host', $engine === 'pgsql' ? 'postgres' : 'mysql-primary')) ?>">
       </div>
       <div>
         <label>Port</label>
-        <input type="number" name="port" required value="<?= h($prefill('port', '3306')) ?>">
+        <input type="number" name="port" id="port" required value="<?= h($prefill('port', (string)$defaultPort)) ?>">
       </div>
     </div>
     <label>User</label>
-    <input type="text" name="user" required value="<?= h($prefill('user', 'root')) ?>">
+    <input type="text" name="user" required value="<?= h($prefill('user', $engine === 'pgsql' ? 'postgres' : 'root')) ?>">
     <label>Password</label>
     <input type="password" name="password" autocomplete="off">
     <label>Database (must already exist)</label>
@@ -266,12 +319,25 @@ $prefill = function (string $key, string $fallback = '') {
     <div class="limits">
       Max upload: <code><?= h((string)ini_get('upload_max_filesize')) ?></code> /
       max POST: <code><?= h((string)ini_get('post_max_size')) ?></code>.
-      The file is staged to <code>/tmp</code> on the server before mysql ingests it.
+      The file is staged to <code>/tmp</code> on the server before the client ingests it.
     </div>
   </fieldset>
 
   <p><button type="submit">Restore</button></p>
 </form>
+
+<script>
+  // Follow the engine with its default port, unless the field was edited.
+  (function () {
+    var engine = document.getElementById('engine'), port = document.getElementById('port');
+    var defaults = { mysql: '3306', pgsql: '5432' };
+    engine.addEventListener('change', function () {
+      if (port.value === '' || port.value === defaults.mysql || port.value === defaults.pgsql) {
+        port.value = defaults[engine.value];
+      }
+    });
+  })();
+</script>
 
 </body>
 </html>

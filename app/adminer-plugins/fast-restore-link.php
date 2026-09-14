@@ -25,6 +25,13 @@ class AdminerFastRestoreLink extends Adminer\Plugin
             return null;
         }
 
+        // restore.php pipes the upload into the `mysql` or `psql` client —
+        // nothing else has an equivalent. "server" is Adminer's driver key
+        // for MySQL/MariaDB.
+        if (!defined('Adminer\\DRIVER') || !in_array(\Adminer\DRIVER, array('server', 'pgsql'), true)) {
+            return null;
+        }
+
         $params = $this->prefillParams();
         $url = 'restore.php' . ($params ? '?' . http_build_query($params) : '');
 
@@ -34,7 +41,7 @@ class AdminerFastRestoreLink extends Adminer\Plugin
         ?>
 <p style="margin:.5em 0 1em">
     <a href="<?php echo Adminer\h($url); ?>"
-       title="Upload a .sql / .sql.gz / .sql.zst dump and pipe it through native mysql client"
+       title="Upload a .sql / .sql.gz / .sql.zst dump and pipe it through the native client"
        style="display:inline-flex;align-items:center;gap:.3em;padding:.35em .7em;
               background:#10b981;color:#fff;border-radius:4px;
               text-decoration:none;font-weight:500;font-size:.9em;">
@@ -52,7 +59,11 @@ class AdminerFastRestoreLink extends Adminer\Plugin
      */
     private function prefillParams(): array
     {
-        $params = array();
+        // Tells restore.php which client to use and which default port to
+        // show; the user can still switch engines on the form itself.
+        $params = array(
+            'engine' => (defined('Adminer\\DRIVER') && \Adminer\DRIVER === 'pgsql' ? 'pgsql' : 'mysql'),
+        );
 
         // Server (may be "host" or "host:port")
         if (defined('Adminer\\SERVER') && \Adminer\SERVER !== '') {
