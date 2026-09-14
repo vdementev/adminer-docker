@@ -18,12 +18,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: Dockerfile.mysql-nginx
-            tag: mysql-nginx
-          - dockerfile: Dockerfile.mysql-standalone
-            tag: mysql-standalone
-          - dockerfile: Dockerfile.mysql-fpm
-            tag: mysql-fpm
+          # `legacy` keeps the old mysql-* tags pointing at the same digest;
+          # drop those lines once nobody pulls them any more.
+          - dockerfile: Dockerfile.nginx
+            tag: nginx
+            legacy: mysql-nginx
+            latest: "true"
+          - dockerfile: Dockerfile.standalone
+            tag: standalone
+            legacy: mysql-standalone
+            latest: "false"
+          - dockerfile: Dockerfile.fpm
+            tag: fpm
+            legacy: mysql-fpm
+            latest: "false"
     uses: vdementev/docker-workflows/.github/workflows/build-image.yml@v1
     permissions:
       contents: read
@@ -32,9 +40,12 @@ jobs:
       image: adminer
       dockerfile: ${{ matrix.dockerfile }}
       cache-scope: ${{ matrix.tag }}
+      platforms: linux/amd64
       push: ${{ github.event_name != 'pull_request' }}
       tags: |
         type=raw,value=${{ matrix.tag }}
+        type=raw,value=${{ matrix.legacy }}
+        type=raw,value=latest,enable=${{ matrix.latest }}
       labels: |
         org.opencontainers.image.title=adminer (${{ matrix.tag }})
         org.opencontainers.image.description=Adminer 6 for MySQL, PostgreSQL, SQLite, MS SQL, Oracle, MongoDB, ClickHouse, Elasticsearch, Redis and SimpleDB — parallel zstd/gzip dumps, fast restore, hardening.

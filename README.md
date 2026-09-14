@@ -5,9 +5,13 @@ a pool that sizes itself to the container's CPU.
 
 ## Tags
 
-- `latest`, `mysql-nginx` - nginx and php-fpm version on port 8080. RECOMENDED
-- `mysql-standalone` - standalone version using php build-in web server on port 8080.
-- `mysql-fpm` - bare php-fpm on port 9000, for an existing web server.
+- `latest`, `nginx` - nginx and php-fpm version on port 8080. RECOMENDED
+- `standalone` - standalone version using php build-in web server on port 8080.
+- `fpm` - bare php-fpm on port 9000, for an existing web server.
+
+The old `mysql-nginx` / `mysql-standalone` / `mysql-fpm` tags still point at the
+same images so nothing breaks, but they're aliases now — the images stopped
+being MySQL-only. `linux/amd64` only.
 
 ## Databases
 
@@ -43,7 +47,13 @@ PHP's row-by-row loop:
   cores instead of PHP's single-threaded zlib.
 
 **Fast Restore** in the sidebar pipes an uploaded `.sql` / `.sql.gz` /
-`.sql.zst` straight into the `mysql` client; it only shows up on MySQL.
+`.sql.zst` straight into the `mysql` or `psql` client — the PostgreSQL side
+runs inside a single transaction with `ON_ERROR_STOP`, so a bad dump rolls
+back instead of leaving half a database. It shows up on MySQL and PostgreSQL.
+
+nginx serves HTML, CSS and JS with gzip and brotli; the export streams are
+left alone (their content types aren't in either filter's list), so a dump is
+never compressed twice.
 
 ## Tuning
 

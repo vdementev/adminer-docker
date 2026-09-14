@@ -24,6 +24,8 @@ RUN set -eux; \
         curl \
         default-mysql-client \
         dumb-init \
+        libnginx-mod-http-brotli-filter \
+        libnginx-mod-http-brotli-static \
         nginx \
         pigz \
         sqlite3 \

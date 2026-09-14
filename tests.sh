@@ -35,7 +35,9 @@ check_extensions() {
 }
 
 check_clients() {
+    check "client mysql"      "has_bin $1 /usr/bin/mysql"
     check "client mysqldump"  "has_bin $1 /usr/bin/mysqldump"
+    check "client psql"       "has_bin $1 /usr/bin/psql"
     check "client pg_dump"    "has_bin $1 /usr/bin/pg_dump"
     check "client sqlite3"    "has_bin $1 /usr/bin/sqlite3"
     check "client zstd/pigz"  "has_bin $1 /usr/bin/zstd && has_bin $1 /usr/bin/pigz"
@@ -66,11 +68,11 @@ cd "$(dirname "$0")"
 docker rm -f test-standalone test-nginx test-fpm test-scale > /dev/null 2>&1 || true
 
 printf "${BOLD}Building images...${NC}\n"
-docker build -q -f Dockerfile.mysql-standalone -t adminer-test:standalone .
+docker build -q -f Dockerfile.standalone -t adminer-test:standalone .
 pass "standalone built"
-docker build -q -f Dockerfile.mysql-nginx -t adminer-test:nginx .
+docker build -q -f Dockerfile.nginx -t adminer-test:nginx .
 pass "nginx built"
-docker build -q -f Dockerfile.mysql-fpm -t adminer-test:fpm .
+docker build -q -f Dockerfile.fpm -t adminer-test:fpm .
 pass "fpm built"
 
 printf "\n${BOLD}Starting containers...${NC}\n"
@@ -102,6 +104,9 @@ check "server_tokens off"          '! curl -sI http://127.0.0.1:18081/ 2>&1 | gr
 check "X-Robots-Tag header"        'curl -sI http://127.0.0.1:18081/robots.txt 2>&1 | grep -qi X-Robots-Tag'
 check "dumb-init PID 1"            'docker exec test-nginx cat /proc/1/cmdline | tr "\0" " " | grep -q dumb-init'
 check "fpm pool scaled to CPUs"    '[ "$(docker top test-nginx | grep -c "pool www")" -gt 1 ]'
+check "gzip on html"               'curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null http://127.0.0.1:18081/ | grep -qi "content-encoding: gzip"'
+check "brotli on html"             'curl -s -H "Accept-Encoding: br" -D - -o /dev/null http://127.0.0.1:18081/ | grep -qi "content-encoding: br"'
+check "Vary: Accept-Encoding"      'curl -s -H "Accept-Encoding: br" -D - -o /dev/null http://127.0.0.1:18081/ | grep -qi "vary:.*accept-encoding"'
 check_extensions test-nginx
 check_clients test-nginx
 check_drivers http://127.0.0.1:18081/
