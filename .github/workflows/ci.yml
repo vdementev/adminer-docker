@@ -53,3 +53,13 @@ jobs:
         org.opencontainers.image.revision=${{ github.sha }}
         org.opencontainers.image.licenses=MIT
     secrets: inherit
+
+  sync-description:
+    if: github.event_name != 'pull_request'
+    needs: build
+    uses: vdementev/docker-workflows/.github/workflows/sync-description.yml@v1
+    with:
+      image: adminer
+      # Docker Hub caps this at 100 characters.
+      short-description: "Adminer 6 with every database driver it supports, native parallel dumps and fast restore."
+    secrets: inherit
