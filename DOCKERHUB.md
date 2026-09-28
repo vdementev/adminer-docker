@@ -15,7 +15,7 @@ CPU the container was given.
 | `latest`, `nginx` | nginx + php-fpm on port 8080. **Recommended.** |
 | `standalone` | PHP's built-in server on port 8080. One process tree, no nginx. |
 | `fpm` | Bare php-fpm on port 9000, for an existing web server. |
-| `6.0.2-nginx`, `6.0-nginx`, … | The same flavors pinned to an Adminer version. |
+| `6.1.1-nginx`, `6.1-nginx`, … | The same flavors pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain.

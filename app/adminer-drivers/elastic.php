@@ -162,7 +162,7 @@ if (isset($_GET["elastic"])) {
 			function fetch_field() {
 				$field = current($this->fields);
 				next($this->fields);
-				return (object) array('name' => $field, 'type' => 15, 'charsetnr' => 0);
+				return (object) array('name' => $field);
 			}
 		}
 	}
@@ -172,6 +172,7 @@ if (isset($_GET["elastic"])) {
 		static $jush = "elastic";
 
 		static $serverSchemes = array("http", "https");
+		static $serverPorts = array(80, 443);
 		static $serverPath = true;
 
 		public $insertFunctions = array("json");

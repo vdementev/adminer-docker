@@ -49,7 +49,7 @@ jobs:
       # tests.sh's three suites runs against it.
       test-command: FLAVOR=${{ matrix.tag }} ./tests.sh
       # Adminer's own version, read out of the vendored app in the image that
-      # just passed the tests, gives 6.0.2-<flavor> and 6.0-<flavor> next to
+      # just passed the tests, gives 6.1.1-<flavor> and 6.1-<flavor> next to
       # the moving flavor tags.
       version-command: >-
         docker run --rm --entrypoint sh "$IMAGE"

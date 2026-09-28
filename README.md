@@ -23,7 +23,7 @@ is a database client with a login form, not something to publish.
 | `latest`, `nginx` | nginx + php-fpm on `:8080`. Use this one unless you have a reason not to. |
 | `standalone` | PHP's built-in server on `:8080`. Fewer moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
-| `6.0.2-nginx`, `6.0-nginx`, … | The same flavors, pinned to an Adminer version. |
+| `6.1.1-nginx`, `6.1-nginx`, … | The same flavors, pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain. Lifecycle and
