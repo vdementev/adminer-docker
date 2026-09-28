@@ -4,9 +4,9 @@ Upstream driver plugins for the databases that aren't compiled into
 `adminer.php` itself. Same deal as `adminer.php`: vendored wholesale, not
 patched. They belong to Adminer (Apache 2.0 / GPL 2), not to this repo.
 
-Current version: **6.0.2** — must match `VERSION` in `app/adminer.php`.
+Current version: **6.1.1** — must match `VERSION` in `app/adminer.php`.
 
-    ver=6.0.2
+    ver=6.1.1
     for d in clickhouse elastic mongo redis simpledb; do
         curl -sSLf -o "app/adminer-drivers/$d.php" \
             "https://www.adminer.org/static/download/$ver/drivers/$d.php"

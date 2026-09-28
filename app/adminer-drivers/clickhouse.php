@@ -64,8 +64,8 @@ if (isset($_GET["clickhouse"])) {
 					return true;
 				}
 
-				$return = json_decode($file, true);
-				if (!is_array($return) || !isset($return['data']) || !isset($return['meta'])) {
+				$return = json_decode_exact($file); // json_decode() would round e.g. UInt64 or Decimal and they would be saved rounded
+				if (!is_object($return) || !isset($return->data) || !isset($return->meta)) {
 					$this->errno = json_last_error();
 					$this->error = ($this->errno && function_exists('json_last_error_msg')
 						? json_last_error_msg()
@@ -103,17 +103,19 @@ if (isset($_GET["clickhouse"])) {
 				return true;
 			}
 
+			/** @var string[] */ static $escapes = array( // escape sequences in a string literal, unconvert_field() reverts them
+				"\\" => "\\\\",
+				"'" => "\\'",
+				"\0" => "\\0",
+				"\x08" => "\\b", // PHP has no \b
+				"\f" => "\\f",
+				"\n" => "\\n",
+				"\r" => "\\r",
+				"\t" => "\\t",
+			);
+
 			function quote($string) {
-				return "'" . strtr($string, array(
-					"\\" => "\\\\",
-					"'" => "\\'",
-					"\0" => "\\0",
-					"\b" => "\\b",
-					"\f" => "\\f",
-					"\n" => "\\n",
-					"\r" => "\\r",
-					"\t" => "\\t",
-				)) . "'";
+				return "'" . strtr($string, self::$escapes) . "'";
 			}
 		}
 
@@ -121,20 +123,20 @@ if (isset($_GET["clickhouse"])) {
 			public $num_rows, $columns, $meta;
 			private $rows = array(), $rowOffset = 0, $fieldOffset = 0;
 
-			function __construct(array $result) {
-				$this->meta = (array) $result['meta'];
-				foreach ((array) $result['data'] as $item) {
+			function __construct(\stdClass $result) {
+				$this->meta = array_map('get_object_vars', $result->meta);
+				foreach ((array) $result->data as $item) {
 					$row = array();
 					foreach ((array) $item as $key => $val) {
 						$type = (isset($this->meta[$key]['type']) ? $this->meta[$key]['type'] : '');
 						$row[$key] = ($val === null || is_scalar($val)
-							? $this->normalizeValue($val, $type)
-							: json_encode($val, 256 | 64) // JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES available since PHP 5.4
+							? $this->normalizeValue(json_scalar($val), $type)
+							: json_encode_exact($val, 256 | 64) // JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES available since PHP 5.4
 						);
 					}
 					$this->rows[] = $row;
 				}
-				$this->num_rows = (isset($result['rows']) ? $result['rows'] : count($this->rows));
+				$this->num_rows = count($this->rows);
 				$this->columns = array_map(function ($column) {
 					return $column['name'];
 				}, $this->meta); // array_column() is available since PHP 5.5
@@ -166,8 +168,7 @@ if (isset($_GET["clickhouse"])) {
 				$return = new \stdClass;
 				if ($column < count($this->columns)) {
 					$return->name = $this->meta[$column]['name'];
-					$return->type = $this->meta[$column]['type'];
-					$return->charsetnr = 0;
+					$return->native_type = $this->meta[$column]['type'];
 				}
 				return $return;
 			}
@@ -183,6 +184,7 @@ if (isset($_GET["clickhouse"])) {
 		static $jush = "clickhouse";
 
 		static $serverSchemes = array("http", "https");
+		static $serverPorts = array(80, 443);
 		static $serverPath = true;
 
 		public $functions = array("length", "lower", "round", "toDate", "toDateTime", "toString", "upper");
@@ -206,6 +208,15 @@ jush.tr.clickhouse = { sql_apo: /'/, sqlite_quo: /"/, bac: /`/, one: /--/, com: 
 jush.autocompleting.sql.push('clickhouse', 'sqlite_quo', 'bac'); // sqlite_quo and bac are quoted identifiers
 
 jush.slugs.clickhouse = name => name.toLowerCase(); // the pages of the functions are lowercase
+
+jush.link_key.clickhouse = (key, url, name) => { // the type names are case sensitive, the same name in lowercase is the function building the value
+	const functions = {
+		'data-types/array': 'functions/array-functions',
+		'data-types/map': 'functions/tuple-map-functions',
+		'data-types/tuple': 'functions/tuple-functions',
+	};
+	return (functions[key] && name == name.toLowerCase() ? functions[key] : key);
+};
 
 jush.build_links2('clickhouse', 'https://clickhouse.com/docs/sql-reference/$key', /(\b)/, /(\b)/gi, {
 	'statements/select': /(SELECT)/,
@@ -255,6 +266,8 @@ jush.build_links2('clickhouse', 'https://clickhouse.com/docs/sql-reference/$key'
 	'data-types/datetime64': /(DateTime64)/,
 	'data-types/datetime': /(DateTime)/,
 	'data-types/date': /(Date)/,
+	'data-types/time64': /(Time64)/,
+	'data-types/time': /(Time)/,
 	'data-types/enum': /(Enum(?:8|16)?)/,
 	'data-types/array': /(Array)/,
 	'data-types/tuple': /(Tuple)/,
@@ -266,6 +279,7 @@ jush.build_links2('clickhouse', 'https://clickhouse.com/docs/sql-reference/$key'
 	'data-types/boolean': /(Bool)/,
 	'data-types/ipv4': /(IPv4)/,
 	'data-types/ipv6': /(IPv6)/,
+	'data-types/geo#$1': /(MultiLineString|MultiPolygon|MultiPoint|LineString|Polygon|Point|Ring)/, // the longer names must be first
 	'data-types/nested-data-structures/nested': /(Nested)/,
 	'data-types/simpleaggregatefunction': /(SimpleAggregateFunction)/, // must be before AggregateFunction
 	'data-types/aggregatefunction': /(AggregateFunction)/,
@@ -299,31 +313,37 @@ JS;
 		}
 
 		function slowQuery($query, $timeout) {
-			return "$query SETTINGS max_execution_time = $timeout";
+			// readonly = 1 forbids changing any setting, the query would fail
+			return (get_val("SELECT value FROM system.settings WHERE name = 'readonly'") == 1 ? $query : "$query SETTINGS max_execution_time = $timeout");
+		}
+
+		function md5($column, array $field) {
+			// not FixedString, its rendered value lacks the NUL padding
+			if (preg_match('~^(LowCardinality\()?(Nullable\()?String\b~', $field["full_type"])) {
+				return "lower(hex(MD5($column)))";
+			}
+			// json_decode_exact() renders a geometry with the numbers of the server; not Array, Map, Tuple or JSON, the server escapes / in their strings
+			if (preg_match('~^(Point|Ring|MultiPoint|(Multi)?LineString|(Multi)?Polygon)$~', $field["type"])) {
+				return "lower(hex(MD5(toJSONString($column))))";
+			}
 		}
 
 		function __construct(Db $connection) {
 			parent::__construct($connection);
 			$this->types = array(
 				lang('Numbers') => array(
-					"Int8" => 3, "Int16" => 5, "Int32" => 10, "Int64" => 19,
-					"UInt8" => 3, "UInt16" => 5, "UInt32" => 10, "UInt64" => 20,
-					"Int128" => 39, "Int256" => 78, "UInt128" => 39, "UInt256" => 78,
-					"Float32" => 14, "Float64" => 23, "BFloat16" => 7, "Bool" => 1,
-					"Decimal" => 76, "Decimal32" => 9, "Decimal64" => 18,
-					"Decimal128" => 38, "Decimal256" => 76,
+					"Int8" => 3, "Int16" => 5, "Int32" => 10, "Int64" => 19, "Int128" => 39, "Int256" => 78,
+					"UInt8" => 3, "UInt16" => 5, "UInt32" => 10, "UInt64" => 20, "UInt128" => 39, "UInt256" => 78,
+					"Float32" => 14, "Float64" => 23, "BFloat16" => 7,
+					"Bool" => 1,
+					"Decimal" => 76, "Decimal32" => 9, "Decimal64" => 18, "Decimal128" => 38, "Decimal256" => 76,
 				),
-				lang('Date and time') => array(
-					"Date" => 10, "Date32" => 10, "DateTime" => 19, "DateTime64" => 29,
-				),
-				lang('Strings') => array("String" => 0, "FixedString" => 0),
-				lang('Other') => array(
-					"UUID" => 36, "IPv4" => 15, "IPv6" => 39,
-					"Enum8" => 0, "Enum16" => 0, "Array" => 0, "Map" => 0,
-					"Tuple" => 0, "Nested" => 0, "LowCardinality" => 0,
-					"AggregateFunction" => 0, "SimpleAggregateFunction" => 0,
-					"Variant" => 0, "Dynamic" => 0, "JSON" => 0,
-				),
+				lang('Date and time') => array("Date" => 10, "Date32" => 10, "DateTime" => 19, "DateTime64" => 29, "Time" => 9, "Time64" => 19),
+				lang('Strings') => array("String" => 0, "FixedString" => 0, "UUID" => 36, "JSON" => 0),
+				lang('Lists') => array("Enum8" => 0, "Enum16" => 0, "Array" => 0, "Map" => 0, "Tuple" => 0, "Nested" => 0),
+				lang('Network') => array("IPv4" => 15, "IPv6" => 39),
+				lang('Geometry') => array("Point" => 0, "Ring" => 0, "LineString" => 0, "MultiLineString" => 0, "MultiPoint" => 0, "Polygon" => 0, "MultiPolygon" => 0),
+				lang('Other') => array("LowCardinality" => 0, "AggregateFunction" => 0, "SimpleAggregateFunction" => 0, "Variant" => 0, "Dynamic" => 0),
 			);
 		}
 
@@ -337,7 +357,7 @@ JS;
 			$rows = get_rows(
 				"SELECT c." . idf_escape('table') . " AS " . idf_escape('table')
 				. ", c.name, c.type, c.default_kind, c.default_expression, c.comment, "
-				. "c.is_in_primary_key, c.is_in_sorting_key, t.engine AS table_engine "
+				. "c.is_in_primary_key, c.is_in_sorting_key, c.is_in_partition_key, t.engine AS table_engine "
 				. "FROM system.columns AS c LEFT JOIN system.tables AS t "
 				. "ON c.database = t.database AND c." . idf_escape('table') . " = t.name "
 				. "WHERE c.database = " . q($this->conn->_db)
@@ -415,12 +435,12 @@ JS;
 			: ''
 		);
 		$engine = (isset($row['table_engine']) ? $row['table_engine'] : '');
-		$isView = (bool) preg_match('~View$~', $engine);
+		$isView = preg_match('~View$~', $engine);
 		$privileges = array("select" => 1, "where" => 1, "order" => 1);
 		if (!$generated && !$isView) {
 			$privileges["insert"] = 1;
 		}
-		if (!$generated && preg_match('~MergeTree$~', $engine)) {
+		if (!$generated && preg_match('~MergeTree$~', $engine) && !$row['is_in_sorting_key'] && !$row['is_in_partition_key']) { // ALTER TABLE UPDATE can't change a key column
 			$privileges["update"] = 1;
 		}
 		return array(
@@ -462,7 +482,7 @@ JS;
 	}
 
 	function found_rows(array $table_status, array $where) {
-		return get_val("SELECT count() FROM " . table($table_status["Name"]) . ($where ? " WHERE " . implode(" AND ", $where) : ""));
+		return ($where ? null : $table_status["Rows"]); // total_rows is exact, null in views; select.inc.php counts the filtered rows itself
 	}
 
 	function alter_table($table, $name, array $fields, array $foreign, $comment, $engine, $collation, $auto_increment, $partitioning) {
@@ -651,8 +671,16 @@ JS;
 	}
 
 	function unconvert_field(array $field, $return) {
-		if ($return !== "NULL" && in_array($field['type'], array("Array", "Map", "Tuple"), true)) {
-			return "JSONExtract($return, " . q($field['full_type']) . ")";
+		if ($return !== "NULL" && preg_match('~^(Array|Map|Tuple|Point|Ring|MultiPoint|(Multi)?LineString|(Multi)?Polygon)$~', $field['type'])) { // CAST can't parse their JSON
+			$type = $field['full_type'];
+			if (preg_match('~\bDecimal~', $type) && preg_match("~^'(.*)'\$~s", $return, $match)) {
+				// JSONExtract() reads an unquoted number as a float which rounds a decimal, it parses a quoted one exactly
+				$json = strtr($match[1], array_flip(Db::$escapes));
+				$return = q(preg_replace('~"(?:[^"\\\\]|\\\\.)*+"(*SKIP)(*FAIL)|-?\d[-+.\deE]*+~', '"$0"', $json));
+			}
+			// JSONExtract() supports only the String keys of Map, CAST converts them
+			$string_keys = preg_replace("~\\bMap\\([A-Za-z]\\w*(?:\\((?:[^()']|'(?:[^'\\\\]|\\\\.)*'|\\([^()]*\\))*\\))?, ~", 'Map(String, ', $type);
+			return ($string_keys != $type ? "CAST(JSONExtract($return, " . q($string_keys) . ") AS $type)" : "JSONExtract($return, " . q($type) . ")");
 		}
 		if ($return !== "NULL" && $field['full_type'] !== "String") {
 			return "CAST($return AS $field[full_type])";
@@ -664,7 +692,7 @@ JS;
 		$return = array();
 		$result = get_rows(
 			"SELECT c.name, c.type, c.default_kind, c.default_expression, c.comment, "
-			. "c.is_in_primary_key, c.is_in_sorting_key, t.engine AS table_engine "
+			. "c.is_in_primary_key, c.is_in_sorting_key, c.is_in_partition_key, t.engine AS table_engine "
 			. "FROM system.columns AS c LEFT JOIN system.tables AS t "
 			. "ON c.database = t.database AND c." . idf_escape('table') . " = t.name "
 			. "WHERE c.database = " . q(connection()->_db)
@@ -894,9 +922,6 @@ JS;
 	}
 
 	function support($feature) {
-		return (bool) preg_match(
-			"~^(columns|comment|copy|database|drop_col|dump|indexes|kill|move_col|processlist|sql|status|table|variables|view)$~",
-			$feature
-		);
+		return preg_match('~^(columns|comment|copy|database|drop_col|dump|indexes|kill|move_col|processlist|sql|status|table|variables|view)$~', $feature);
 	}
 }

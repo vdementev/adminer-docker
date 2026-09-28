@@ -9,7 +9,7 @@ Three flavors of the same Adminer build. Pick by how you want it served.
 | `latest`, `nginx` | nginx + php-fpm on `:8080`. The one to use unless you have a reason not to. |
 | `standalone` | PHP's built-in server on `:8080`. No nginx, smallest moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
-| `6.0.2-nginx`, `6.0-nginx`, … | The same three flavors, pinned to an Adminer version. |
+| `6.1.1-nginx`, `6.1-nginx`, … | The same three flavors, pinned to an Adminer version. |
 | `mysql-nginx`, `mysql-standalone`, `mysql-fpm` | Deprecated aliases. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
@@ -43,7 +43,7 @@ reviewed and merged like any other change.
 ```yaml
 services:
   adminer:
-    image: dementev/adminer:6.0-nginx@sha256:...
+    image: dementev/adminer:6.1-nginx@sha256:...
 ```
 
 ## Exposure
