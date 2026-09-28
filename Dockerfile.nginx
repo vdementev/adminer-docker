@@ -52,6 +52,12 @@ RUN set -eux; \
     curl -sSLf -o /usr/local/bin/install-php-extensions \
         https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
     chmod +x /usr/local/bin/install-php-extensions; \
+    # PEAR 1.10.18 reads a chunked HTTP response with a single fread() per
+    # chunk, which comes back short over TLS and then parses body bytes as
+    # the next chunk size. pecl.php.net sits behind a CDN that answers
+    # chunked, so every PECL install fatals. Read each chunk in full.
+    sed -i 's|$data .= fread($fp, $chunk_size);|$data .= stream_get_contents($fp, $chunk_size);|' \
+        /usr/local/lib/php/PEAR/REST.php; \
     install-php-extensions \
         mongodb \
         mysqli \
