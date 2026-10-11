@@ -380,10 +380,6 @@ JS;
 			return '[^\s\S]'; // Redis has no comments
 		}
 
-		function allFields() {
-			return array(); // the parent implementation would send a SQL query
-		}
-
 		function insert($table, array $set) {
 			return queries("SET " . implode(" ", $set)); // the values are quoted by quote()
 		}
