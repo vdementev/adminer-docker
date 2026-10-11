@@ -49,7 +49,7 @@ being MySQL-only. `linux/amd64` only.
 | Amazon SimpleDB | `adminer-drivers/simpledb.php` | HTTP |
 
 Firebird is the one Adminer driver missing: it needs ext-interbase, which
-doesn't exist for PHP 8.4.
+doesn't exist for PHP 8.5.
 
 The Oracle Instant Client is roughly a third of the image. Build with
 `--build-arg WITH_ORACLE=false` to drop it along with ext-oci8/ext-pdo_oci.

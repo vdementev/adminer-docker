@@ -62,7 +62,7 @@ services:
 | Amazon SimpleDB | driver plugin | HTTP |
 
 Firebird is the one Adminer driver missing: it needs ext-interbase, which
-doesn't exist for PHP 8.4.
+doesn't exist for PHP 8.5.
 
 The Oracle Instant Client is a sizeable chunk of the image. Building from
 source with `--build-arg WITH_ORACLE=false` drops it along with ext-oci8 and
@@ -108,7 +108,7 @@ worker pools from it. Everything it picks can be overridden:
 
 ## What's inside
 
-- **Debian trixie** on `php:8.4-fpm-trixie` / `php:8.4-cli-trixie`.
+- **Debian trixie** on `php:8.5-fpm-trixie` / `php:8.5-cli-trixie`.
 - Adminer 6 (the full build), plugins for parallel dumps, fast restore and a
   dark-mode switcher.
 - Client binaries: `mysql`, `mysqldump`, `psql`, `pg_dump`, `sqlite3`,

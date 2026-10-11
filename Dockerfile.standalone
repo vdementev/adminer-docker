@@ -1,4 +1,4 @@
-FROM php:8.4-cli-trixie
+FROM php:8.5-cli-trixie
 
 # OCI metadata. CI adds revision/version/created on top of these.
 LABEL org.opencontainers.image.title="adminer (standalone)" \
