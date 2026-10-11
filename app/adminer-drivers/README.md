@@ -28,5 +28,5 @@ Adminer from flagging them as outdated on the databases page.
 | `simpledb.php` | Amazon SimpleDB | ext-simplexml, `allow_url_fopen` |
 
 Not vendored: `firebird.php` needs ext-interbase, which doesn't exist for PHP
-8.4 (only `pdo_firebird` does, and the driver doesn't use PDO). `igdb.php` and
+8.5 (only `pdo_firebird` does, and the driver doesn't use PDO). `igdb.php` and
 `imap.php` aren't databases.
