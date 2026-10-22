@@ -4,7 +4,9 @@ Adminer 6 with every database driver it knows about, native parallel dumps, a
 fast restore path, and a worker pool that sizes itself to the container's CPU
 allowance.
 
-Published as [`dementev/adminer`](https://hub.docker.com/r/dementev/adminer).
+Published as [`dementev/adminer`](https://hub.docker.com/r/dementev/adminer), built on
+[`lotuswebagency/php`](https://hub.docker.com/r/lotuswebagency/php) 8.5 (Wolfi, PHP
+compiled from source with PGO).
 
 ```yaml
 services:
@@ -23,15 +25,16 @@ is a database client with a login form, not something to publish.
 | `latest`, `nginx` | nginx + php-fpm on `:8080`. Use this one unless you have a reason not to. |
 | `standalone` | PHP's built-in server on `:8080`. Fewer moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
-| `6.1.2-nginx`, `6.1-nginx`, … | The same flavors, pinned to an Adminer version. |
+| `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. See [MySQL-only build](#mysql-only-build). |
+| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | The same tags, pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain. Lifecycle and
 pinning: [SUPPORT.md](SUPPORT.md).
 
 The old `mysql-nginx` / `mysql-standalone` / `mysql-fpm` tags still point at the
-same digests so nothing breaks, but they are aliases now — the images stopped
-being MySQL-only. `linux/amd64` only.
+same digests as the full images so nothing breaks — despite the name they carry
+every driver. The MySQL-only build is `mysql-only-*`. `linux/amd64` only.
 
 ## Databases
 
@@ -40,8 +43,8 @@ being MySQL-only. `linux/amd64` only.
 | MySQL, MariaDB | built in | ext-mysqli, ext-pdo_mysql |
 | PostgreSQL, CockroachDB | built in | ext-pgsql, ext-pdo_pgsql |
 | SQLite | built in | ext-sqlite3, ext-pdo_sqlite |
-| MS SQL | built in | ext-sqlsrv, ext-pdo_sqlsrv, ext-pdo_dblib (FreeTDS fallback) |
-| Oracle (beta) | built in | ext-oci8, ext-pdo_oci |
+| MS SQL | built in | ext-pdo_dblib (FreeTDS) |
+| Oracle (beta) | built in | ext-oci8 |
 | MongoDB | `adminer-drivers/mongo.php` | ext-mongodb |
 | ClickHouse | `adminer-drivers/clickhouse.php` | HTTP |
 | Elasticsearch, OpenSearch | `adminer-drivers/elastic.php` | HTTP |
@@ -51,8 +54,23 @@ being MySQL-only. `linux/amd64` only.
 Firebird is the one Adminer driver missing: it needs ext-interbase, which
 doesn't exist for PHP 8.5.
 
+MS SQL goes through pdo_dblib and FreeTDS. Microsoft's sqlsrv extensions need
+its ODBC driver, which links OpenSSL 3, and the base image carries only
+OpenSSL 4; Adminer's MS SQL driver uses pdo_dblib on its own when sqlsrv is
+absent.
+
 The Oracle Instant Client is roughly a third of the image. Build with
-`--build-arg WITH_ORACLE=false` to drop it along with ext-oci8/ext-pdo_oci.
+`--build-arg WITH_ORACLE=false` to drop it along with ext-oci8.
+
+## MySQL-only build
+
+The `mysql-only-*` tags carry upstream's MySQL-only Adminer
+(`adminer-<version>-mysql-en.php`) and nothing on top of the base for other
+databases: no driver plugins, no FreeTDS, no Oracle Instant Client, no MongoDB
+extension. The login page offers MySQL alone. The dump modes, Fast Restore,
+tuning and flavors are the same as in the full build.
+
+Build it from source with `--build-arg DRIVERS=mysql`.
 
 ## Faster dumps
 
@@ -71,9 +89,9 @@ PHP's row-by-row loop:
 runs inside a single transaction with `ON_ERROR_STOP`, so a bad dump rolls
 back instead of leaving half a database. It shows up on MySQL and PostgreSQL.
 
-nginx serves HTML, CSS and JS with gzip and brotli; the export streams are
-left alone (their content types aren't in either filter's list), so a dump is
-never compressed twice.
+nginx serves HTML, CSS and JS with gzip; the export streams are left alone
+(their content types aren't in the filter's list), so a dump is never
+compressed twice.
 
 ## Tuning
 
@@ -95,13 +113,15 @@ Everything it sets can be overridden:
 
 ## Tests
 
-`./tests.sh` builds all three flavors and asserts what the image promises: it
-runs as `www-data`, dumb-init is PID 1, every database extension and client
-binary is present, all ten drivers are offered on the login page, the pool sizes
-itself, and the nginx flavor sends its hardening headers and compresses HTML but
-not the export streams. CI runs the same script per flavor against the built
-image before anything can be published
-(`IMAGE=… FLAVOR=nginx ./tests.sh` to test one you already have).
+`./tests.sh` builds all three flavors in both driver sets and asserts what the
+image promises: it runs as `www-data`, tini is PID 1, every database extension
+and client binary is present and PHP starts without warnings, all ten drivers
+are offered on the login page (only MySQL on the MySQL-only build), the pool
+sizes itself, and the nginx flavor sends its hardening headers and compresses
+HTML but not the export streams. CI runs the same script per image against the
+built image before anything can be published
+(`IMAGE=… FLAVOR=nginx [DRIVERS=mysql] ./tests.sh` to test one you already
+have).
 
 ## Security and provenance
 

@@ -1,4 +1,24 @@
-FROM php:8.5-fpm-trixie
+# DRIVERS=all builds every database Adminer supports. DRIVERS=mysql builds the
+# MySQL/MariaDB-only image: upstream's MySQL-only adminer.php, no driver
+# plugins, no extra extensions, no Oracle Instant Client.
+ARG DRIVERS=all
+
+# Oracle's Instant Client is ~100 MB of the image and only the (beta) Oracle
+# driver needs it — build with --build-arg WITH_ORACLE=false to drop it.
+ARG WITH_ORACLE=true
+
+FROM lotuswebagency/php:8.5-ext-builder AS ext-all
+ARG WITH_ORACLE
+COPY build/ext.sh /usr/local/bin/build-ext
+RUN sh /usr/local/bin/build-ext "$WITH_ORACLE"
+
+FROM scratch AS ext-mysql
+WORKDIR /out
+
+FROM ext-${DRIVERS} AS ext
+
+FROM lotuswebagency/php:8.5-fpm
+ARG DRIVERS
 
 # OCI metadata. CI adds revision/version/created on top of these.
 LABEL org.opencontainers.image.title="adminer (nginx)" \
@@ -10,84 +30,56 @@ LABEL org.opencontainers.image.title="adminer (nginx)" \
       org.opencontainers.image.authors="Vasilii Dementev https://vasiliidementev.com" \
       org.opencontainers.image.licenses="MIT"
 
-ENV IPE_ICU_EN_ONLY=1 \
-    DEBIAN_FRONTEND=noninteractive
-WORKDIR /app
+# nginx's master needs root to bind and drop to www-data, and php-fpm's pool
+# switches to www-data itself.
+USER root
 
-# Oracle's Instant Client is ~100 MB of the image and only the (beta) Oracle
-# driver needs it — build with --build-arg WITH_ORACLE=false to drop it.
-ARG WITH_ORACLE=true
-
+COPY --from=ext /out/ /
 COPY ./docker-entrypoint.sh /usr/local/bin/
 
-# Packages and PHP extensions. The extension list covers every database
-# Adminer can talk to: MySQL/MariaDB (mysqli, pdo_mysql), PostgreSQL and
-# CockroachDB (pgsql, pdo_pgsql), SQLite (bundled with the base image),
-# MS SQL (sqlsrv/pdo_sqlsrv, pdo_dblib as the FreeTDS fallback), Oracle
-# (oci8, pdo_oci) and MongoDB (mongodb, via the driver plugin). ClickHouse,
-# Elasticsearch, Redis and SimpleDB drivers speak HTTP or raw sockets and
-# need no extension of their own.
+# The base already carries the MySQL/MariaDB and PostgreSQL 18 clients, zstd,
+# and the extensions for MySQL, PostgreSQL and SQLite. On top of that, all
+# drivers adds MS SQL (pdo_dblib + FreeTDS), Oracle (oci8 + Instant Client)
+# and MongoDB (the base's shared mongodb module). ClickHouse, Elasticsearch,
+# Redis and SimpleDB speak HTTP or raw sockets and need no extension.
 RUN set -eux; \
-    apt-get update; \
-    apt-get upgrade -y; \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        default-mysql-client \
-        dumb-init \
-        libnginx-mod-http-brotli-filter \
-        libnginx-mod-http-brotli-static \
-        nginx \
-        pigz \
-        sqlite3 \
-        zstd; \
-    # PostgreSQL client from PGDG, not Debian: trixie ships pg_dump 17, which
-    # refuses to dump an 18+ server. 18 reads everything back to 9.2.
-    install -d -m 0755 /etc/apt/keyrings; \
-    curl -sSLf -o /etc/apt/keyrings/pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
-    echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends postgresql-client-18; \
-    curl -sSLf -o /usr/local/bin/install-php-extensions \
-        https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions; \
-    chmod +x /usr/local/bin/install-php-extensions; \
-    # PEAR 1.10.18 reads a chunked HTTP response with a single fread() per
-    # chunk, which comes back short over TLS and then parses body bytes as
-    # the next chunk size. pecl.php.net sits behind a CDN that answers
-    # chunked, so every PECL install fatals. Read each chunk in full.
-    sed -i 's|$data .= fread($fp, $chunk_size);|$data .= stream_get_contents($fp, $chunk_size);|' \
-        /usr/local/lib/php/PEAR/REST.php; \
-    install-php-extensions \
-        mongodb \
-        mysqli \
-        pdo_dblib \
-        pdo_mysql \
-        pdo_pgsql \
-        pdo_sqlsrv \
-        pgsql \
-        sqlsrv \
-        zip \
-        zstd; \
-    if [ "$WITH_ORACLE" = "true" ]; then install-php-extensions oci8 pdo_oci; fi; \
-    chown -R www-data:www-data /var/lib/nginx /var/log/nginx; \
+    apk add --no-cache \
+        nginx-mainline \
+        nginx-mainline-fastcgi-params \
+        nginx-mainline-mime-types \
+        mariadb-connector-c \
+        pigz; \
+    # The base's MariaDB client looks for its auth plugins in a directory no
+    # package fills, so it cannot log in to MySQL 8's caching_sha2_password
+    # accounts. mariadb-connector-c ships them; point the client there.
+    printf '[client]\nplugin-dir=/usr/lib/mariadb/plugin\n' > /etc/my.cnf; \
+    if [ "$DRIVERS" = "all" ]; then \
+        apk add --no-cache freetds sqlite; \
+        if [ -d /opt/oracle/instantclient ]; then apk add --no-cache libaio; ldconfig; fi; \
+        php-ext-enable mongodb; \
+    fi; \
     chmod +x /usr/local/bin/docker-entrypoint.sh; \
-    rm -rf /usr/local/etc/php-fpm.d/*; \
-    rm -f /usr/local/etc/php/php.ini-development /usr/local/etc/php/php.ini-production; \
-    rm -f /usr/local/bin/install-php-extensions; \
-    install -d -m 0777 -o www-data -g www-data /tmp/nginx/body /tmp/nginx/fastcgi_temp; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /usr/local/etc/php-fpm.d; \
+    install -d -m 0777 -o www-data -g www-data /tmp/nginx/body /tmp/nginx/fastcgi_temp
 
-# Copy config files
+# Config files
 COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
 COPY ./conf/www.conf /usr/local/etc/php-fpm.conf
 COPY ./conf/nginx.conf /etc/nginx/nginx.conf
 COPY --chown=www-data:www-data /app /app
 
+RUN set -eux; \
+    if [ "$DRIVERS" = "mysql" ]; then \
+        mv /app/adminer-mysql.php /app/adminer.php; \
+        rm -rf /app/adminer-drivers; \
+    else \
+        rm /app/adminer-mysql.php; \
+    fi
+
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
     CMD curl --fail --silent http://127.0.0.1:8080/ping.php || exit 1
 
 EXPOSE 8080
-ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/docker-entrypoint.sh"]
+# -s: stay a subreaper when something else (`init: true`) already is PID 1.
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["nginx"]
