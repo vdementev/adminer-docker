@@ -17,7 +17,7 @@ set -eu
 # Online CPUs, capped by the cgroup CPU quota when one is set (nproc reports
 # the host's core count inside a quota-limited container).
 cpu_count() {
-    _cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+    _cpus=$(nproc 2>/dev/null || echo 1)
     _quota=""
 
     if [ -r /sys/fs/cgroup/cpu.max ]; then                        # cgroup v2

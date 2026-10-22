@@ -15,14 +15,16 @@ CPU the container was given.
 | `latest`, `nginx` | nginx + php-fpm on port 8080. **Recommended.** |
 | `standalone` | PHP's built-in server on port 8080. One process tree, no nginx. |
 | `fpm` | Bare php-fpm on port 9000, for an existing web server. |
-| `6.1.2-nginx`, `6.1-nginx`, … | The same flavors pinned to an Adminer version. |
+| `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. |
+| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain.
 
 `mysql-nginx`, `mysql-standalone` and `mysql-fpm` still resolve to the same
-digests. They're aliases now — the images stopped being MySQL-only — and
-they'll be dropped once nobody pulls them.
+digests as the full images — despite the name they carry every driver — and
+they'll be dropped once nobody pulls them. The MySQL-only build is
+`mysql-only-*`.
 
 `linux/amd64` only. SBOM, max-mode build provenance and a Cosign keyless
 signature on every published digest. Every merge to `main` publishes, plus a
@@ -53,8 +55,8 @@ services:
 | MySQL, MariaDB | built in | ext-mysqli, ext-pdo_mysql |
 | PostgreSQL, CockroachDB | built in | ext-pgsql, ext-pdo_pgsql |
 | SQLite | built in | ext-sqlite3, ext-pdo_sqlite |
-| MS SQL | built in | ext-sqlsrv, ext-pdo_sqlsrv, ext-pdo_dblib (FreeTDS fallback) |
-| Oracle (beta) | built in | ext-oci8, ext-pdo_oci |
+| MS SQL | built in | ext-pdo_dblib (FreeTDS) |
+| Oracle (beta) | built in | ext-oci8 |
 | MongoDB | driver plugin | ext-mongodb |
 | ClickHouse | driver plugin | HTTP |
 | Elasticsearch, OpenSearch | driver plugin | HTTP |
@@ -64,9 +66,18 @@ services:
 Firebird is the one Adminer driver missing: it needs ext-interbase, which
 doesn't exist for PHP 8.5.
 
+MS SQL goes through pdo_dblib and FreeTDS: Microsoft's sqlsrv extensions need
+its ODBC driver, which links OpenSSL 3, and the base carries only OpenSSL 4.
+
 The Oracle Instant Client is a sizeable chunk of the image. Building from
-source with `--build-arg WITH_ORACLE=false` drops it along with ext-oci8 and
-ext-pdo_oci.
+source with `--build-arg WITH_ORACLE=false` drops it along with ext-oci8.
+
+## MySQL-only build
+
+The `mysql-only-*` tags carry upstream's MySQL-only Adminer and nothing on top
+of the base for other databases: no driver plugins, no FreeTDS, no Oracle
+Instant Client, no MongoDB extension. Same dump modes, Fast Restore, tuning and
+flavors as the full build.
 
 ## Faster dumps and restores
 
@@ -85,8 +96,7 @@ PHP's row-by-row loop:
 single transaction with `ON_ERROR_STOP`, so a bad dump rolls back instead of
 leaving half a database behind.
 
-The PostgreSQL client comes from PGDG rather than Debian's archive, because
-pg_dump 17 refuses to dump a PostgreSQL 18 server.
+The PostgreSQL client is version 18, which dumps every server back to 9.2.
 
 ## Tuning
 
@@ -108,17 +118,17 @@ worker pools from it. Everything it picks can be overridden:
 
 ## What's inside
 
-- **Debian trixie** on `php:8.5-fpm-trixie` / `php:8.5-cli-trixie`.
+- **[`lotuswebagency/php`](https://hub.docker.com/r/lotuswebagency/php)** `8.5-fpm` / `8.5-cli`: PHP 8.5 compiled from source with PGO on Wolfi (glibc).
 - Adminer 6 (the full build), plugins for parallel dumps, fast restore and a
   dark-mode switcher.
-- Client binaries: `mysql`, `mysqldump`, `psql`, `pg_dump`, `sqlite3`,
-  `zstd`, `pigz`.
-- Runs as **www-data**, `dumb-init` as PID 1, healthcheck on every flavor.
+- Client binaries: `mysql`, `mysqldump` (MariaDB client), `psql`, `pg_dump`,
+  `sqlite3`, `zstd`, `pigz`. The MySQL-only build has no `sqlite3`.
+- Runs as **www-data**, `tini` as PID 1, healthcheck on every flavor.
 - `server_tokens off`, `X-Robots-Tag` on every response, `open_basedir`
   confined to what the app and the clients actually touch.
-- nginx serves HTML, CSS and JS with **gzip and brotli**. The export content
-  types are in neither filter's list, so a dump is never compressed twice or
-  buffered on its way out.
+- nginx serves HTML, CSS and JS with **gzip**. The export content types are
+  not in its list, so a dump is never compressed twice or buffered on its way
+  out.
 
 ## Security and provenance
 

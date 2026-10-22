@@ -14,23 +14,51 @@ concurrency:
 
 jobs:
   build:
+    # Branch protection requires these checks by name; the full images keep
+    # the names they had before the matrix grew.
+    name: build (${{ matrix.dockerfile }}, ${{ matrix.tag }}${{ matrix.legacy && format(', {0}', matrix.legacy) || '' }}, ${{ matrix.latest }})
     strategy:
       fail-fast: false
       matrix:
         include:
           # `legacy` keeps the old mysql-* tags pointing at the same digest;
-          # drop those lines once nobody pulls them any more.
+          # drop those lines once nobody pulls them any more. They are full
+          # images despite the name: the MySQL-only build is mysql-only-*.
           - dockerfile: Dockerfile.nginx
+            flavor: nginx
             tag: nginx
+            drivers: all
             legacy: mysql-nginx
             latest: "true"
           - dockerfile: Dockerfile.standalone
+            flavor: standalone
             tag: standalone
+            drivers: all
             legacy: mysql-standalone
             latest: "false"
           - dockerfile: Dockerfile.fpm
+            flavor: fpm
             tag: fpm
+            drivers: all
             legacy: mysql-fpm
+            latest: "false"
+          - dockerfile: Dockerfile.nginx
+            flavor: nginx
+            tag: mysql-only-nginx
+            drivers: mysql
+            legacy: ""
+            latest: "false"
+          - dockerfile: Dockerfile.standalone
+            flavor: standalone
+            tag: mysql-only-standalone
+            drivers: mysql
+            legacy: ""
+            latest: "false"
+          - dockerfile: Dockerfile.fpm
+            flavor: fpm
+            tag: mysql-only-fpm
+            drivers: mysql
+            legacy: ""
             latest: "false"
     uses: vdementev/docker-workflows/.github/workflows/build-image.yml@v1
     permissions:
@@ -40,28 +68,30 @@ jobs:
       image: adminer
       dockerfile: ${{ matrix.dockerfile }}
       cache-scope: ${{ matrix.tag }}
+      build-args: DRIVERS=${{ matrix.drivers }}
       platforms: linux/amd64
       push: ${{ github.event_name != 'pull_request' }}
       # Smoke-tests the locally built image before it can be published: user,
       # extensions, clients, drivers offered, and the flavor-specific checks
       # (nginx headers/compression, fpm pool sizing, standalone CLI server).
       # $IMAGE is set by the reusable workflow; FLAVOR picks which of
-      # tests.sh's three suites runs against it.
-      test-command: FLAVOR=${{ matrix.tag }} ./tests.sh
+      # tests.sh's three suites runs against it, DRIVERS which driver set.
+      test-command: FLAVOR=${{ matrix.flavor }} DRIVERS=${{ matrix.drivers }} ./tests.sh
       # Adminer's own version, read out of the vendored app in the image that
       # just passed the tests, gives 6.1.2-<flavor> and 6.1-<flavor> next to
-      # the moving flavor tags.
+      # the moving flavor tags (6.1.2-mysql-only-<flavor> for the MySQL-only
+      # build).
       version-command: >-
         docker run --rm --entrypoint sh "$IMAGE"
         -c "grep -m1 -oaE '@version [0-9.]+' /app/adminer.php | cut -d' ' -f2"
       version-tag-suffix: -${{ matrix.tag }}
       tags: |
         type=raw,value=${{ matrix.tag }}
-        type=raw,value=${{ matrix.legacy }}
+        type=raw,value=${{ matrix.legacy }},enable=${{ matrix.legacy != '' }}
         type=raw,value=latest,enable=${{ matrix.latest }}
       labels: |
         org.opencontainers.image.title=adminer (${{ matrix.tag }})
-        org.opencontainers.image.description=Adminer 6 for MySQL, PostgreSQL, SQLite, MS SQL, Oracle, MongoDB, ClickHouse, Elasticsearch, Redis and SimpleDB — parallel zstd/gzip dumps, fast restore, hardening.
+        org.opencontainers.image.description=${{ matrix.drivers == 'mysql' && 'Adminer 6 for MySQL and MariaDB only — the lightest build: parallel zstd/gzip dumps, native mysqldump export, fast restore.' || 'Adminer 6 for MySQL, PostgreSQL, SQLite, MS SQL, Oracle, MongoDB, ClickHouse, Elasticsearch, Redis and SimpleDB — parallel zstd/gzip dumps, fast restore, hardening.' }}
         org.opencontainers.image.url=https://hub.docker.com/r/dementev/adminer
         org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}#readme
         org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

@@ -2,14 +2,16 @@
 
 ## Tags
 
-Three flavors of the same Adminer build. Pick by how you want it served.
+Three flavors of the same Adminer build, each in two driver sets: every
+database, or MySQL/MariaDB only. Pick by how you want it served.
 
 | Tag | What it is |
 |---|---|
 | `latest`, `nginx` | nginx + php-fpm on `:8080`. The one to use unless you have a reason not to. |
 | `standalone` | PHP's built-in server on `:8080`. No nginx, smallest moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
-| `6.1.2-nginx`, `6.1-nginx`, … | The same three flavors, pinned to an Adminer version. |
+| `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | The same flavors, MySQL and MariaDB only. The lightest build. |
+| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | Any of the above, pinned to an Adminer version. |
 | `mysql-nginx`, `mysql-standalone`, `mysql-fpm` | Deprecated aliases. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
@@ -24,9 +26,9 @@ and least portable piece of the image.
 
 `mysql-nginx`, `mysql-standalone` and `mysql-fpm` date from when these images
 carried only the MySQL build of Adminer. They now point at exactly the same
-digests as the unprefixed tags and are kept so nothing breaks. They will stop
-being published once they stop being pulled; move to `nginx`, `standalone` or
-`fpm`.
+digests as the unprefixed tags, with every driver, and are kept so nothing
+breaks. They will stop being published once they stop being pulled; move to
+`nginx`, `standalone` or `fpm`, or to `mysql-only-*` if MySQL is all you need.
 
 ## What "supported" means
 
