@@ -14,6 +14,9 @@ concurrency:
 
 jobs:
   build:
+    # Branch protection requires these checks by name; the full images keep
+    # the names they had before the matrix grew.
+    name: build (${{ matrix.dockerfile }}, ${{ matrix.tag }}${{ matrix.legacy && format(', {0}', matrix.legacy) || '' }}, ${{ matrix.latest }})
     strategy:
       fail-fast: false
       matrix:
