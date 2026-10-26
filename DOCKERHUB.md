@@ -16,7 +16,7 @@ CPU the container was given.
 | `standalone` | PHP's built-in server on port 8080. One process tree, no nginx. |
 | `fpm` | Bare php-fpm on port 9000, for an existing web server. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. |
-| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
+| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain.
@@ -63,8 +63,8 @@ services:
 | Redis, KeyDB | driver plugin | sockets |
 | Amazon SimpleDB | driver plugin | HTTP |
 
-Firebird is the one Adminer driver missing: it needs ext-interbase, which
-doesn't exist for PHP 8.5.
+Firebird is the one Adminer driver missing: since 6.2 it needs pdo_firebird,
+and Wolfi packages no Firebird client library to build it against.
 
 MS SQL goes through pdo_dblib and FreeTDS: Microsoft's sqlsrv extensions need
 its ODBC driver, which links OpenSSL 3, and the base carries only OpenSSL 4.
@@ -162,7 +162,7 @@ front, an app runtime, a database, and a way into it.
 |---|---|
 | [`dementev/angie`](https://hub.docker.com/r/dementev/angie) — [source](https://github.com/vdementev/angie-docker) | Public-facing reverse proxy and TLS terminator — Angie, the nginx fork, with brotli, zstd and cache-purge |
 | [`dementev/nginx`](https://hub.docker.com/r/dementev/nginx) — [source](https://github.com/vdementev/nginx-docker) | Static sites and SPAs behind that proxy — brotli/zstd siblings, Prometheus stub_status |
-| [`dementev/php-fpm-with-ext`](https://hub.docker.com/r/dementev/php-fpm-with-ext) — [source](https://github.com/vdementev/docker-php-fpm-with-ext) | PHP-FPM and CLI, PHP 7.0 → 8.5, with the extensions most projects reach for |
+| [`lotuswebagency/php`](https://hub.docker.com/r/lotuswebagency/php) — [source](https://github.com/LotusWebAgency/php) | PHP 7.0 → 8.5 compiled from source on Wolfi, hardened and signed — successor to the deprecated `dementev/php-fpm-with-ext` |
 | [`dementev/mysql-percona`](https://hub.docker.com/r/dementev/mysql-percona) — [source](https://github.com/vdementev/mysql-percona-docker) | Percona Server for MySQL 8.4 LTS, XtraBackup built in, no root inside |
 | **[`dementev/adminer`](https://hub.docker.com/r/dementev/adminer)** — this image | Adminer 6 with every driver it supports, for reaching any of the above |
 

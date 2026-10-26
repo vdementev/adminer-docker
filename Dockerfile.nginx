@@ -60,7 +60,7 @@ RUN set -eux; \
     fi; \
     chmod +x /usr/local/bin/docker-entrypoint.sh; \
     rm -rf /usr/local/etc/php-fpm.d; \
-    install -d -m 0777 -o www-data -g www-data /tmp/nginx/body /tmp/nginx/fastcgi_temp
+    install -d -m 0700 -o www-data -g www-data /tmp/nginx/body /tmp/nginx/fastcgi_temp
 
 # Config files
 COPY ./conf/php.ini /usr/local/etc/php/conf.d/999-php.ini
