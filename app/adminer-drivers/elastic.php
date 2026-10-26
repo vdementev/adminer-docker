@@ -570,6 +570,10 @@ JS;
 				"null" => true,
 				"sort" => "_id",
 				"privileges" => array("insert" => 1, "select" => 1, "where" => 1, "order" => 1),
+				"doc" => (connection()->flavor == 'opensearch'
+					? "https://docs.opensearch.org/latest/mappings/metadata-fields/id/"
+					: "https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-id-field"
+				),
 			)
 		);
 		$mapping = connection()->cachedQuery(urlencode($table) . "/_mapping");

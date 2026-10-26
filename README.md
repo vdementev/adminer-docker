@@ -26,7 +26,7 @@ is a database client with a login form, not something to publish.
 | `standalone` | PHP's built-in server on `:8080`. Fewer moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. See [MySQL-only build](#mysql-only-build). |
-| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | The same tags, pinned to an Adminer version. |
+| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | The same tags, pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain. Lifecycle and
@@ -51,8 +51,8 @@ every driver. The MySQL-only build is `mysql-only-*`. `linux/amd64` only.
 | Redis, KeyDB | `adminer-drivers/redis.php` | sockets |
 | Amazon SimpleDB | `adminer-drivers/simpledb.php` | HTTP |
 
-Firebird is the one Adminer driver missing: it needs ext-interbase, which
-doesn't exist for PHP 8.5.
+Firebird is the one Adminer driver missing: since 6.2 it needs pdo_firebird,
+and Wolfi packages no Firebird client library to build it against.
 
 MS SQL goes through pdo_dblib and FreeTDS. Microsoft's sqlsrv extensions need
 its ODBC driver, which links OpenSSL 3, and the base image carries only

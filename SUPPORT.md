@@ -11,7 +11,7 @@ database, or MySQL/MariaDB only. Pick by how you want it served.
 | `standalone` | PHP's built-in server on `:8080`. No nginx, smallest moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | The same flavors, MySQL and MariaDB only. The lightest build. |
-| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | Any of the above, pinned to an Adminer version. |
+| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | Any of the above, pinned to an Adminer version. |
 | `mysql-nginx`, `mysql-standalone`, `mysql-fpm` | Deprecated aliases. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
@@ -45,7 +45,7 @@ reviewed and merged like any other change.
 ```yaml
 services:
   adminer:
-    image: dementev/adminer:6.1-nginx@sha256:...
+    image: dementev/adminer:6.2-nginx@sha256:...
 ```
 
 ## Exposure

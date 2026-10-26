@@ -16,7 +16,7 @@ CPU the container was given.
 | `standalone` | PHP's built-in server on port 8080. One process tree, no nginx. |
 | `fpm` | Bare php-fpm on port 9000, for an existing web server. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. |
-| `6.1.2-nginx`, `6.1-nginx`, `6.1.2-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
+| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain.
@@ -63,8 +63,8 @@ services:
 | Redis, KeyDB | driver plugin | sockets |
 | Amazon SimpleDB | driver plugin | HTTP |
 
-Firebird is the one Adminer driver missing: it needs ext-interbase, which
-doesn't exist for PHP 8.5.
+Firebird is the one Adminer driver missing: since 6.2 it needs pdo_firebird,
+and Wolfi packages no Firebird client library to build it against.
 
 MS SQL goes through pdo_dblib and FreeTDS: Microsoft's sqlsrv extensions need
 its ODBC driver, which links OpenSSL 3, and the base carries only OpenSSL 4.

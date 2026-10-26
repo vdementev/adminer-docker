@@ -78,8 +78,8 @@ jobs:
       # tests.sh's three suites runs against it, DRIVERS which driver set.
       test-command: FLAVOR=${{ matrix.flavor }} DRIVERS=${{ matrix.drivers }} ./tests.sh
       # Adminer's own version, read out of the vendored app in the image that
-      # just passed the tests, gives 6.1.2-<flavor> and 6.1-<flavor> next to
-      # the moving flavor tags (6.1.2-mysql-only-<flavor> for the MySQL-only
+      # just passed the tests, gives 6.2.0-<flavor> and 6.2-<flavor> next to
+      # the moving flavor tags (6.2.0-mysql-only-<flavor> for the MySQL-only
       # build).
       version-command: >-
         docker run --rm --entrypoint sh "$IMAGE"
