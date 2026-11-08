@@ -16,7 +16,7 @@ CPU the container was given.
 | `standalone` | PHP's built-in server on port 8080. One process tree, no nginx. |
 | `fpm` | Bare php-fpm on port 9000, for an existing web server. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. |
-| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
+| `6.3.0-nginx`, `6.3-nginx`, `6.3.0-mysql-only-nginx`, … | The same tags pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain.

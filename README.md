@@ -26,7 +26,7 @@ is a database client with a login form, not something to publish.
 | `standalone` | PHP's built-in server on `:8080`. Fewer moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | MySQL and MariaDB only — the lightest build. See [MySQL-only build](#mysql-only-build). |
-| `6.2.0-nginx`, `6.2-nginx`, `6.2.0-mysql-only-nginx`, … | The same tags, pinned to an Adminer version. |
+| `6.3.0-nginx`, `6.3-nginx`, `6.3.0-mysql-only-nginx`, … | The same tags, pinned to an Adminer version. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
 can never claim an Adminer version the image does not contain. Lifecycle and

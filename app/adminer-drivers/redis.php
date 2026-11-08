@@ -123,13 +123,24 @@ if (isset($_GET["redis"])) {
 		function attach(array $server, $username, $password) {
 			$scheme = $server["scheme"];
 			$host = ($scheme ? "$scheme://" : "") . ($server["host"] ?: "127.0.0.1");
-			$this->fp = @fsockopen($host, intval($server["port"] ?: 6379), $errno, $error);
+			$port = intval($server["port"] ?: 6379);
+			// a failed TLS handshake leaves $error empty, its reason is in the first of the warnings
+			$warnings = php_errors(function () use ($host, $port, &$error) {
+				$this->fp = fsockopen($host, $port, $errno, $error);
+			});
 			if (!$this->fp) {
-				return $error;
+				return ($error ?: ($warnings ? $warnings[0] : "Unable to connect"));
 			}
 			// PING verifies that a server without a password really doesn't require one
-			if (!$this->send($password != "" ? array("AUTH", $username, $password) : array("PING"))) {
-				return $this->error;
+			$reply = $this->send($password != "" ? array("AUTH", $username, $password) : array("PING"));
+			if ($reply !== ($password != "" ? "OK" : "PONG")) {
+				$return = $this->error;
+				// any service can listen on the port, only Redis repeats the unknown option in the error
+				$probe = rand_string();
+				return ($reply === false && $this->send(array("HELLO", "2", $probe)) === false && strpos($this->error, $probe) !== false
+					? $return
+					: "The server did not reply as Redis."
+				);
 			}
 			if (DB == "" && preg_match('~redis_version:(.+)~', $this->send(array("INFO", "server")), $match)) {
 				$this->server_info = $match[1];
@@ -177,6 +188,23 @@ if (isset($_GET["redis"])) {
 		* @return list<mixed> replies in the order of the commands
 		*/
 		function sendMulti(array $commands) {
+			$query = array();
+			foreach ($commands as $args) {
+				if (strtoupper($args[0]) == "AUTH") {
+					$args[count($args) - 1] = "***"; // the password
+				}
+				$query[] = format_command($args);
+			}
+			return adminer()->executeQuery(implode("\n", $query), function () use ($commands) {
+				return $this->pipeline($commands);
+			});
+		}
+
+		/** Send the commands and read their replies
+		* @param list<list<string|int>> $commands
+		* @return list<mixed>
+		*/
+		private function pipeline(array $commands) {
 			$cmd = '';
 			foreach ($commands as $args) {
 				$cmd .= "*" . count($args) . "\r\n";
