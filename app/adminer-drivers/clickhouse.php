@@ -14,6 +14,15 @@ if (isset($_GET["clickhouse"])) {
 			private $authorization;
 
 			function rootQuery($db, $query) {
+				return adminer()->executeQuery($query, function () use ($db, $query) {
+					return $this->execute($db, $query);
+				});
+			}
+
+			/** Send the query to the server
+			* @return Result|bool
+			*/
+			private function execute($db, $query) {
 				$this->error = '';
 				$this->errno = 0;
 				$this->affected_rows = 0;
@@ -131,7 +140,7 @@ if (isset($_GET["clickhouse"])) {
 						$type = (isset($this->meta[$key]['type']) ? $this->meta[$key]['type'] : '');
 						$row[$key] = ($val === null || is_scalar($val)
 							? $this->normalizeValue(json_scalar($val), $type)
-							: json_encode_exact($val, 256 | 64) // JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES available since PHP 5.4
+							: json_encode_exact($val, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
 						);
 					}
 					$this->rows[] = $row;
