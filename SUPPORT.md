@@ -11,7 +11,7 @@ database, or MySQL/MariaDB only. Pick by how you want it served.
 | `standalone` | PHP's built-in server on `:8080`. No nginx, smallest moving parts. |
 | `fpm` | Bare php-fpm on `:9000`, for an existing web server in front. |
 | `mysql-only-nginx`, `mysql-only-standalone`, `mysql-only-fpm` | The same flavors, MySQL and MariaDB only. The lightest build. |
-| `6.3.0-nginx`, `6.3-nginx`, `6.3.0-mysql-only-nginx`, … | Any of the above, pinned to an Adminer version. |
+| `6.3.1-nginx`, `6.3-nginx`, `6.3.1-mysql-only-nginx`, … | Any of the above, pinned to an Adminer version. |
 | `mysql-nginx`, `mysql-standalone`, `mysql-fpm` | Deprecated aliases. |
 
 Version tags are read out of the image *after* it is built and tested, so a tag
