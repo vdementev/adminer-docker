@@ -415,7 +415,7 @@ JS;
 	}
 
 	function idf_escape($idf) {
-		return "`" . str_replace("`", "``", $idf) . "`";
+		return "`" . str_replace(array("\\", "`"), array("\\\\", "``"), $idf) . "`";
 	}
 
 	function table($idf) {
